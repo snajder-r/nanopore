@@ -1,21 +1,13 @@
 import os
 import sys
 
-python='/home/r933r/.conda/envs/gastrulation/bin/python'
-reference='/home/r933r/data/projects/nanopore/data/krebs_2020/reference/dmel-all-chromosome-r6.29.fasta'
-basedir='/home/r933r/data/projects/nanopore/data/krebs_2020/'
+configfile: "krebs_2020.yaml"
 
-megalodon='/icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/bin/megalodon'
-guppy='/home/r933r/data/software/users/snajder/guppy/ont-guppy-cpu/bin/guppy_basecall_server'
-megalodon_calibration='/icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/lib/python3.7/site-packages/megalodon/model_data/dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg/megalodon_mod_calibration.npz'
+for k in config.keys():
+    globals()[k] = config[k]
 
 
-per_batch=5
 
-chroms = ['2L','2R', '3L', '3R', '4', 'X', 'Y', 'mitochondrion_genome']
-
-#justsamples = ['invitro11_1', 'invitro12_1', 'invitro11_2', 'invitro12_2', 'footprinting']
-justsamples = ['invitro11_1','invitro12_1']
 samples = []
 batches = []
 
@@ -176,6 +168,52 @@ rule merge_met_perchrom:
     shell: '{python} met_merge.py ' + os.path.join(basedir, 'met') + ' {wildcards.sample} {wildcards.chrom} {output}'
 
 
+rule tombo_make_index:
+    input: os.path.join(basedir, 'raw/{sample}/single/')
+    output: os.path.join(basedir, 'raw/{sample}/.single.RawGenomeCorrected_000.tombo.index')
+    params:
+        jobname='tombo_make_index',
+        runtime='24:00',
+        memusage='16000',
+        slots='1',
+        misc=''
+    shell: '{tombo} filter clear_filters --fast5-basedirs {input}'
+
+rule tombo_resquiggle:
+    input: 
+        index=rules.tombo_make_index.output,
+        directory=rules.tombo_make_index.input
+    output: os.path.join(basedir, 'raw/{sample}/.single.resquiggled')
+    params:
+        jobname='tombo_resquiggle',
+        runtime='48:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]',
+        misc=''
+    shell: '''
+           {tombo} resquiggle --processes 32 --dna {input.directory} {reference};
+           RESULT=$?
+           if $RESULT -eq 0; then touch {output}; fi
+           exit $RESULT
+           '''
+
+rule tombo_metcall:
+    input: resquiggled=rules.tombo_resquiggle.output,
+           directory=rules.tombo_make_index.input
+    output: stats_6ma=os.path.join(basedir, 'tombo/{sample}.6mA.tombo.stats'),
+            stats_5mc=os.path.join(basedir, 'tombo/{sample}.5mC.tombo.stats')
+    params:
+        jobname='tombo_metcall',
+        runtime='48:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]',
+        misc=''
+    shell: '''
+           {tombo} detect_modification alternative_model --fast5-basedirs {input.directory} --statistics-file-basename {wildcards.sample} --alternate-bases 6mA 5mC --processes 32
+           '''  
+
+
+
 def allmetcall_combinator(*args, **kwargs):
     # All samples and batches
     for i in range(len(args[0])):
@@ -223,6 +261,9 @@ rule allmetmerged:
 
 rule allvarcall:
     input: expand(os.path.join(basedir, 'var/{sample}_sv.vcf'), sample=justsamples)
+
+rule all_tombo_metcall:
+    input: expand(rules.tombo_metcall.output.stats_5mc, sample=justsamples)
 
 rule test:
     input: os.path.join(basedir, 'megalodon/invitro11_1/0/basecalls.modified_base_scores.hdf5')
