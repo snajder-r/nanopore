@@ -1,11 +1,10 @@
 import os
 import sys
 
-configfile: "krebs_2020.yaml"
+configfile: "medulloblastoma.yaml"
 
 for k in config.keys():
     globals()[k] = config[k]
-
 
 
 samples = []
@@ -22,6 +21,17 @@ def update_batches():
                     samples.append(s)
                     batches.append(b)
                     samplebatches[s].append(b)
+
+def find_fast5(indir, fl=[]):
+    ll = os.listdir(indir)
+    for l in ll:
+        l = os.path.join(indir,l)
+        if os.path.isdir(l):
+            fl = fl + find_fast5(l, fl)
+        elif l.endswith('.fast5'):
+            fl.append(l)
+    return fl
+
 
 update_batches()
 print(samplebatches)
@@ -61,8 +71,23 @@ rule fast5_to_fastq:
         memusage='8000',
         slots='1',
         misc=''
-    shell: '{python} fast5_to_fastq.py {input} > {output}'
+    run:
+        files = find_fast5(input[0])
+        with file(output[0],'w') as of:
+            for fn in files:
+                try:
+                    with h5py.File(fn,'r') as f:
+                        for read in f.keys():
+                            fq = f[read]['Analyses/{basecall_id}/BaseCalled_template/Fastq'.format(basecall_id=basecall_id)][()].decode('utf8')
+                            fq = fq.split('\n')
+                            if read.startswith('read_'):
+                                read = read[5:]
+                            fq[0] = '@%s'%read
 
+                            of.write('\n'.join(fq), end='\n')
+                except:
+                    print('WARN: Could not read basecalls in %s'%fn)
+                    pass
 
 rule alignment:
     input: rules.fast5_to_fastq.output
@@ -154,19 +179,48 @@ rule megalodon:
     shell: '{megalodon} --guppy-params "--cpu_threads_per_caller 16" --guppy-server-path {guppy} --overwrite --output-directory %s --mod-calibration-filename {megalodon_calibration} --outputs=mod_basecalls {input}' % os.path.join(basedir, 'megalodon/{wildcards.sample}/{wildcards.batch}/')
 
 def merge_met_perchrom_input(wildcards):
-    return expand(os.path.join(basedir, 'met/%s_{batch}_met.tsv' % wildcards.sample), batch=samplebatches[wildcards.sample])
+    return expand(os.path.join(basedir, 'met/%s_{batch}_met_%s.tsv' % (wildcards.sample, wildcards.mettype)), batch=samplebatches[wildcards.sample])
 
 rule merge_met_perchrom:
     input: merge_met_perchrom_input
-    output: os.path.join(basedir, 'met_merged/{sample}_{chrom}_met.pkl')
+    output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
     params:
         jobname='mergemet_{chrom}',
-        runtime='4:00',
-        memusage='16000',
+        runtime='8:00',
+        memusage='32000',
         slots='1',
         misc=''
-    shell: '{python} met_merge.py ' + os.path.join(basedir, 'met') + ' {wildcards.sample} {wildcards.chrom} {output}'
+    run:
+        metcall_dir = os.path.join(basedir, 'met') 
+        sample = wildcards['sample']
+        chrom = wildcards['chrom']
+        mettype = wildcards['mettype']
+        pickle_file = output[0]
 
+        sample_met = None
+
+        sample_batch_re = re.compile('(..)_(.*)_met_(.*)\.tsv')
+
+        for f in os.listdir(metcall_dir):
+            mitch = sample_batch_re.match(f)
+            s = mitch.group(1)
+            batch = mitch.group(2)
+            mt = mitch.group(3)
+            if s != sample or mettype != mt:
+                continue
+            
+            print(f)
+
+            lmet = pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, 
+                               dtype={'chromosome':'category', 'strand':'category', 'num_calling_strands':np.uint8, 'num_motifs':np.uint8})
+
+            lmet = lmet.loc[lmet.chromosome==chrom]
+            if sample_met is None:
+                sample_met = lmet
+            else:
+                sample_met = pd.concat((sample_met, lmet))
+
+        sample_met.to_pickle(pickle_file, compression='gzip')
 
 rule tombo_make_index:
     input: os.path.join(basedir, 'raw/{sample}/single/')
@@ -237,12 +291,12 @@ rule report_methylation:
     shell: '{python} report_met.py ' + os.path.join(basedir,'met') + ' {output} {wildcards.sample} {wildcards.mtype}'
 
 rule report_all_methylation:
-    input: expand(rules.report_methylation.output, mtype=['cpg','gpc','dam'], sample=justsamples)
+    input: expand(rules.report_methylation.output, mtype=['cpg'], sample=justsamples)
 
 
 rule allmetcall:
     input: expand(os.path.join(basedir, 'met/{sample}_{batch}_met_{mtype}.tsv'), \
-               allmetcall_combinator, sample=samples, batch=batches, mtype=['cpg','gpc','dam'])
+               allmetcall_combinator, sample=samples, batch=batches, mtype=['cpg'])
 
 def allmegalodon_combinator(*args, **kwargs):
     # All samples and batches
@@ -256,7 +310,7 @@ rule allmegalodon:
                allmegalodon_combinator, sample=samples, batch=batches)
 
 rule allmetmerged:
-    input: expand(os.path.join(basedir, 'met_merged/{sample}_{chrom}_met.pkl'), sample=justsamples, chrom=chroms)
+    input: expand(os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_cpg.pkl'), sample=justsamples, chrom=chroms)
 
 
 rule allvarcall:
