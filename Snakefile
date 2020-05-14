@@ -10,9 +10,18 @@ for k in config.keys():
 samples = []
 batches = []
 
+'''
+Detect batches for each sample. Fills the global variables:
+  samples: flat array of length num_samples x num_batches
+  batches: flat array of length num_samples x num_batches
+  samplebatches: dict containing the list of batches per sample
+
+samples and batches are filled such that zip(samples,batches) would result
+in the full list of sample and batch tuples.
+'''
 samplebatches = dict()
 def update_batches():
-    for s in justsamples:
+    for s in unique_samples:
         samplebatches[s] = []
         batchdir=os.path.join(basedir,'raw', s,'batched')
         if os.path.exists(batchdir):
@@ -22,23 +31,70 @@ def update_batches():
                     batches.append(b)
                     samplebatches[s].append(b)
 
-def find_fast5(indir, fl=[]):
-    ll = os.listdir(indir)
-    for l in ll:
-        l = os.path.join(indir,l)
-        if os.path.isdir(l):
-            fl = fl + find_fast5(l, fl)
-        elif l.endswith('.fast5'):
-            fl.append(l)
-    return fl
-
-
 update_batches()
 print(samplebatches)
 
+
+'''
+##############################################################################
+# Combinators 
+##############################################################################
+
+Below we define some combinators of wildcards. These can be used in "all_"
+type rules. The expand function in Snakemake assumes that the list of 
+wildcard combinations is always the full cross-product. In our case, this
+is not the case, as samples have different number of batches. 
+
+Therefore we define a few custom combinators below
+'''
+
+''' 
+This combinator assumes that all wildcard variables are simply zipped 
+together. This is designed for the sample and batch variables.
+'''
+def zip_combinator(*args, **kwargs):
+    # All samples and batches
+    for i in range(len(args[0])):
+        yield tuple(args[j][i] for j in range(len(args)))
+
+'''
+This combinator zips the first two arguments, and combines those with the 
+third argument. We use this to create all sample-batch-mtype combinations.
+'''
+def zip2_comb3_combinator(*args, **kwargs):
+    # First two wildcards
+    for i in range(len(args[0])):
+        # Combine with third wildcard
+        for j in range(len(args[2])):
+            #     wc1   -     wc2   -     wc3
+            yield args[0][i], args[1][i], args[2][j]
+
+
+'''
+##############################################################################
+# Splitting fast5 files into batches for parallel processing computation
+##############################################################################
+
+The input directory raw/samplename/guppy/ will be searched for fast5 files.
+The list of fast5 files per sample is split into evenly sized batches.
+
+The directory raw/samplename/batched will contain a subdirectory for each 
+batch.
+
+CAVEAT: The fast5 files will be **symlinked** from the batch directory to the
+basecalled directory. Do NOT delete the fast5 files from the basecalled
+directory!
+
+Rule will not be performed if "batched" directory exists. Delete the "batched"
+directory, if you want to redo batch splitting.
+
+This rule will be performed locally, as it is only creating symlinks and is
+not computationally expensive.
+'''
 rule split_batches:
     output: directory(os.path.join(basedir,'raw/{sample}/batched/'))
     run: 
+        # Create "batched" directory if it doesn't exist
         if not os.path.exists(output[0]):
             os.mkdir(output[0])
         i = 0
@@ -52,7 +108,8 @@ rule split_batches:
             for _ in range(per_batch):
                 if i == len(raw_batches):
                      break
-                src=os.path.join(basedir, os.path.join(sample_dir, raw_batches[i]))
+                src=os.path.join(basedir, os.path.join(sample_dir, 
+                                 raw_batches[i]))
                 dst=os.path.join(batchdir, '%s' % raw_batches[i])
                 os.symlink(src,dst)
                 i+=1
@@ -60,7 +117,29 @@ rule split_batches:
         update_batches()
 
 rule all_split_batches:
-    input: expand(rules.split_batches.output, sample=justsamples)
+    input: expand(rules.split_batches.output, sample=unique_samples)
+
+
+'''
+##############################################################################
+# Extracting FASTQ from basecalled FAST5 files
+##############################################################################
+
+This rule will open each basecalled fast5 for a sample and batch, and create
+a single fastq file as an outputfile, containing the reads for this sample 
+and batch.
+
+The rule depends on the "basecall_id" variable in the config file. This would
+typically be "Basecall_1D_000" if there was only a single basecalling 
+performed. If there were multiple basecalls (e.g. basecalled with different 
+versions of guppy), make sure you specify the correct basecall id in the 
+config file.
+
+If individual fast5 files could not be opened or basecalls could not be found,
+the entire file will be skipped and a warning written to the log. This is
+done because guppy will sometimes file to produce basecalls, and is such a
+case we just skip that file and move on.
+'''
 
 rule fast5_to_fastq:
     input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
@@ -72,13 +151,23 @@ rule fast5_to_fastq:
         slots='1',
         misc=''
     run:
-        files = find_fast5(input[0])
+
+        ll = os.listdir(input[0])
+        for l in ll:
+            l = os.path.join(indir,l)
+            if os.path.isdir(l):
+                fl = fl + find_fast5(l, fl)
+            elif l.endswith('.fast5'):
+                fl.append(l)
+
+        fastq_group='Analyses/{basecall_id}/BaseCalled_template/Fastq'.format(
+                        basecall_id=basecall_id)
         with file(output[0],'w') as of:
-            for fn in files:
+            for fn in fl:
                 try:
                     with h5py.File(fn,'r') as f:
                         for read in f.keys():
-                            fq = f[read]['Analyses/{basecall_id}/BaseCalled_template/Fastq'.format(basecall_id=basecall_id)][()].decode('utf8')
+                            fq = f[read][fastq_group][()].decode('utf8')
                             fq = fq.split('\n')
                             if read.startswith('read_'):
                                 read = read[5:]
@@ -89,9 +178,28 @@ rule fast5_to_fastq:
                     print('WARN: Could not read basecalls in %s'%fn)
                     pass
 
+rule all_fast5_to_fastq:
+    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=samples,  batch=batches)
+
+'''
+##############################################################################
+# Mapping using minimap2
+##############################################################################
+
+This rule will map fastq file for a single sample and batch to the reference. 
+
+Output will be stored in the "mapping" directory as a bam file including a 
+bai index file.
+
+The following steps are performed:
+  - Alignment
+  - Filter only unique mappings
+  - Sort bam file
+  - Create bam index
+'''
 rule alignment:
     input: rules.fast5_to_fastq.output
-    output: os.path.join(basedir, 'mapping/{sample}_{batch}.sorted.filtered.bam')
+    output: os.path.join(basedir,'mapping/{sample}_{batch}.sorted.filtered.bam')
     params:
         jobname='align_{sample}_{batch}',
         runtime='09:00',
@@ -103,6 +211,24 @@ rule alignment:
            minimap2 -a -x map-ont {reference} {input} | samtools view -q 1 -b | samtools sort -T {output}.tmp -o {output}
            samtools index {output}
            '''
+
+rule all_alignment:
+    input: expand(rules.alignment.output, zip_combinator, sample=samples, batch=batches)
+
+'''
+##############################################################################
+# Methylation calling using nanopolish
+##############################################################################
+'''
+
+'''
+In preparation for nanopolish methylation calling, raw fast5 entries 
+for each read in the fastq files are indexed so they can be accessed more 
+efficiently by nanopolish.
+
+The output files will be created within the fastq directory 
+(with .index.readdb suffix for each fq file) 
+'''
 rule nanopolish_index:
     input:
         f5=os.path.join(basedir, 'raw/{sample}/batched/{batch}/'),
@@ -116,6 +242,17 @@ rule nanopolish_index:
         misc=''
     shell: 'nanopolish index -d {input.f5} {input.fq}'
 
+rule all_nanopolish_index:
+    input: expand(rules.nanopolish_index.output, zip_combinator, sample=samples, batch=batches)
+
+
+'''
+Performs methylation calling using nanopolish for one sample and batch, for
+one type of methylation call (the "mtype" wildcard). The "mtype" wildcard 
+could be one of "cpg", "gpc", or "dam".
+
+The output will be stored in the "met" directory in tsv format.
+'''
 rule metcall:
     input: 
         fq=rules.fast5_to_fastq.output,
@@ -130,8 +267,90 @@ rule metcall:
         misc=''
     shell: 'nanopolish call-methylation -t 8 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
+rule all_metcall:
+    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, mtype=mettypes)
+
+'''
+This merges the nanopolish methylation calls, loads it into a pandas dataframe
+and stores it in pickled format.
+
+Note that this job is performed per sample per chromosome. It will save one
+outputfile for a sample,chromosome,methylation type combination, in order to 
+break up the data and make it easier to load loater.
+
+So while it merges batches, it also splits up chromosomes.
+'''
+def merge_met_perchrom_input(wildcards):
+    return expand(os.path.join(basedir, 
+        'met/%s_{batch}_met_%s.tsv' % (wildcards.sample, wildcards.mettype)),
+        batch=samplebatches[wildcards.sample])
+
+rule merge_met_perchrom:
+    input: merge_met_perchrom_input
+    output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
+    params:
+        jobname='mergemet_{chrom}',
+        runtime='8:00',
+        memusage='32000',
+        slots='1',
+        misc=''
+    run:
+        metcall_dir = os.path.join(basedir, 'met') 
+        sample = wildcards['sample']
+        chrom = wildcards['chrom']
+        mettype = wildcards['mettype']
+        pickle_file = output[0]
+
+        sample_met = None
+        sample_batch_re = re.compile('(..)_(.*)_met_(.*)\.tsv')
+        for f in os.listdir(metcall_dir):
+            mitch = sample_batch_re.match(f)
+            s = mitch.group(1)
+            batch = mitch.group(2)
+            mt = mitch.group(3)
+            if s != sample or mettype != mt:
+                continue
+            
+            print(f)
+
+            lmet = pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, 
+                               dtype={'chromosome':'category', 
+                                      'strand':'category', 
+                                      'num_calling_strands':np.uint8, 
+                                      'num_motifs':np.uint8})
+
+            lmet = lmet.loc[lmet.chromosome==chrom]
+            if sample_met is None:
+                sample_met = lmet
+            else:
+                sample_met = pd.concat((sample_met, lmet))
+
+        sample_met.to_pickle(pickle_file, compression='gzip')
+
+rule all_merge_met_perchrom:
+    input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
+
+
+'''
+##############################################################################
+# Merging of BAM files
+##############################################################################
+
+In case you need a single bam file for one sample (e.g. for SV calling), this 
+rule performs the merging and re-sorting of bam files. The 
+prepare_mergebams_input function returns the list of bam files, which will 
+then in an intermediate step be saved to a txt. 
+
+The following steps are performed:
+ - Create filelist file
+ - Merge using samtools merge
+ - Use calmd to re-generate the MD tag for the merged bam file
+ - Re-sort using samtools sort  (not sure if this is necessary after merge)
+'''
 def prepare_mergebams_input(wildcards):
-    return expand((os.path.join(basedir, 'mapping/%s' % wildcards.sample) + '_{batch}.sorted.filtered.bam'), batch=samplebatches[wildcards.sample])
+    return expand((os.path.join(basedir, 'mapping/%s' % wildcards.sample) + 
+        '_{batch}.sorted.filtered.bam'), 
+        batch=samplebatches[wildcards.sample])
 
 rule prepare_mergebams:
     input: prepare_mergebams_input
@@ -152,6 +371,19 @@ rule mergebams:
            samtools merge -b {input} - | samtools calmd -b - {reference} | samtools sort -T {output}.tmp -o {output}
            '''
 
+rule all_mergebams:
+    input: expand(rules.mergebams.output, sample=unique_samples)
+
+'''
+##############################################################################
+# Calling of SVs using sniffles
+##############################################################################
+
+Uses merged bams as input. Since sniffles considers the amount of evidence 
+for an SV, it is important that it has access to all reads, hence it needs a
+merged bam file. Therefore it depends on the mergebams rule and can run only
+per sample and not batchwise.
+'''
 rule varcall:
     input:
         bam=rules.mergebams.output
@@ -164,9 +396,31 @@ rule varcall:
         misc=''
     shell: '''
            module load gcc/5.4.0
-           sniffles -s 4 -t 16 -m {input} -v {output}
+           {sniffles} -s 4 -t 16 -m {input} -v {output}
            '''
 
+rule all_varcall:
+    input: expand(rules.varcall.output, sample=unique_samples)
+
+
+'''
+##############################################################################
+# Methylation calling using Megalodon
+##############################################################################
+
+Use Megalodon without GPU support to perform methylation calling. This 
+requires guppy methylation called fast5 files.
+
+The config file must contain the megalodon_calibration, which points to the
+calibration filename specific to the machine and modification type.
+
+Also requires the path to the guppy basecalling server in the "guppy" 
+variable.
+
+While Megalodon supports GPU computation, I found it is typically faster to do
+batched CPU computations, since I can do more parallelization than using the
+limited number of GPUs available on the DKFZ cluster.
+'''
 rule megalodon:
     input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
     output: os.path.join(basedir, 'megalodon/{sample}/{batch}/basecalls.modified_base_scores.hdf5')
@@ -178,50 +432,22 @@ rule megalodon:
         misc=''
     shell: '{megalodon} --guppy-params "--cpu_threads_per_caller 16" --guppy-server-path {guppy} --overwrite --output-directory %s --mod-calibration-filename {megalodon_calibration} --outputs=mod_basecalls {input}' % os.path.join(basedir, 'megalodon/{wildcards.sample}/{wildcards.batch}/')
 
-def merge_met_perchrom_input(wildcards):
-    return expand(os.path.join(basedir, 'met/%s_{batch}_met_%s.tsv' % (wildcards.sample, wildcards.mettype)), batch=samplebatches[wildcards.sample])
+rule all_megalodon:
+    input: expand(rules.megalodon.output, zip_combinator, sample=samples, batch=batches)
 
-rule merge_met_perchrom:
-    input: merge_met_perchrom_input
-    output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
-    params:
-        jobname='mergemet_{chrom}',
-        runtime='8:00',
-        memusage='32000',
-        slots='1',
-        misc=''
-    run:
-        metcall_dir = os.path.join(basedir, 'met') 
-        sample = wildcards['sample']
-        chrom = wildcards['chrom']
-        mettype = wildcards['mettype']
-        pickle_file = output[0]
 
-        sample_met = None
+'''
+##############################################################################
+# TOMBO Methylation calling
+##############################################################################
 
-        sample_batch_re = re.compile('(..)_(.*)_met_(.*)\.tsv')
+Note that tombo requires SINGLE fast5 files. They are expected to be in the
+directory raw/samplename/single.
+'''
 
-        for f in os.listdir(metcall_dir):
-            mitch = sample_batch_re.match(f)
-            s = mitch.group(1)
-            batch = mitch.group(2)
-            mt = mitch.group(3)
-            if s != sample or mettype != mt:
-                continue
-            
-            print(f)
-
-            lmet = pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, 
-                               dtype={'chromosome':'category', 'strand':'category', 'num_calling_strands':np.uint8, 'num_motifs':np.uint8})
-
-            lmet = lmet.loc[lmet.chromosome==chrom]
-            if sample_met is None:
-                sample_met = lmet
-            else:
-                sample_met = pd.concat((sample_met, lmet))
-
-        sample_met.to_pickle(pickle_file, compression='gzip')
-
+'''
+Creates index of fast5 raw files for Tombo
+'''
 rule tombo_make_index:
     input: os.path.join(basedir, 'raw/{sample}/single/')
     output: os.path.join(basedir, 'raw/{sample}/.single.RawGenomeCorrected_000.tombo.index')
@@ -233,6 +459,10 @@ rule tombo_make_index:
         misc=''
     shell: '{tombo} filter clear_filters --fast5-basedirs {input}'
 
+'''
+Uses Tombo resquiggle to segment the raw signal and align it to the bases.
+CAVEAT: This manipulates the original fast5 files.
+'''
 rule tombo_resquiggle:
     input: 
         index=rules.tombo_make_index.output,
@@ -251,6 +481,9 @@ rule tombo_resquiggle:
            exit $RESULT
            '''
 
+'''
+Perform tombo methylation calling for 6mA and 5mC
+'''
 rule tombo_metcall:
     input: resquiggled=rules.tombo_resquiggle.output,
            directory=rules.tombo_make_index.input
@@ -265,19 +498,20 @@ rule tombo_metcall:
     shell: '''
            {tombo} detect_modification alternative_model --fast5-basedirs {input.directory} --statistics-file-basename {wildcards.sample} --alternate-bases 6mA 5mC --processes 32
            '''  
-
-
-
-def allmetcall_combinator(*args, **kwargs):
-    # All samples and batches
-    for i in range(len(args[0])):
-        # All mtypes
-        for j in range(len(args[2])):
-            #      sample   -  batch   -  mtype
-            yield args[0][i],args[1][i],args[2][j]
         
+rule all_tombo_metcall:
+    input: expand(rules.tombo_metcall.output.stats_5mc, sample=unique_samples)
+
+'''
+##############################################################################
+# Reports methylation histograms - only really useful for benchmarking
+# datasets where you know the methylation rate (like fully methylated or
+# fully unmethylated datasets)
+##############################################################################
+'''
 def report_methylation_input(wildcards):
-    return expand(rules.metcall.output, batch=samplebatches[wildcards.sample], sample=wildcards.sample, mtype=wildcards.mtype)
+    return expand(rules.metcall.output, batch=samplebatches[wildcards.sample], 
+                  sample=wildcards.sample, mtype=wildcards.mtype)
 
 rule report_methylation:
     input: report_methylation_input
@@ -288,38 +522,10 @@ rule report_methylation:
         memusage='4000',
         slots='1',
         misc=''
-    shell: '{python} report_met.py ' + os.path.join(basedir,'met') + ' {output} {wildcards.sample} {wildcards.mtype}'
+    shell: '{python} report_met.py ' + os.path.join(basedir,'met') + \
+           ' {output} {wildcards.sample} {wildcards.mtype}'
 
-rule report_all_methylation:
-    input: expand(rules.report_methylation.output, mtype=['cpg'], sample=justsamples)
-
-
-rule allmetcall:
-    input: expand(os.path.join(basedir, 'met/{sample}_{batch}_met_{mtype}.tsv'), \
-               allmetcall_combinator, sample=samples, batch=batches, mtype=['cpg'])
-
-def allmegalodon_combinator(*args, **kwargs):
-    # All samples and batches
-    for i in range(len(args[0])):
-        #      sample   -  batch   -  mtype
-        yield args[0][i],args[1][i]
-
-
-rule allmegalodon:
-    input: expand(os.path.join(basedir, 'megalodon/{sample}/{batch}/basecalls.modified_base_scores.hdf5'), \
-               allmegalodon_combinator, sample=samples, batch=batches)
-
-rule allmetmerged:
-    input: expand(os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_cpg.pkl'), sample=justsamples, chrom=chroms)
-
-
-rule allvarcall:
-    input: expand(os.path.join(basedir, 'var/{sample}_sv.vcf'), sample=justsamples)
-
-rule all_tombo_metcall:
-    input: expand(rules.tombo_metcall.output.stats_5mc, sample=justsamples)
-
-rule test:
-    input: os.path.join(basedir, 'megalodon/invitro11_1/0/basecalls.modified_base_scores.hdf5')
+rule all_report_methylation:
+    input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
 
 localrules: prepare_mergebams, split_batches
