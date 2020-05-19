@@ -1,0 +1,17 @@
+basedir: /home/r933r/data/projects/nanopore/data/genomeinabottle/
+
+fast5_single_to_multi: /home/r933r/.conda/envs/gastrulation/bin/multi_to_single_fast5
+tombo: /home/r933r/.conda/envs/gastrulation/bin/tombo
+python: /home/r933r/.conda/envs/gastrulation/bin/python
+reference: /home/r933r/snajder/nanopore/data/medulloblastoma_dna/reference/Homo_sapiens.GRCh38.dna_rm.primary_assembly.fa
+
+megalodon: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/bin/megalodon
+megalodon_calibration: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/lib/python3.7/site-packages/megalodon/model_data/dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg/megalodon_mod_calibration.npz
+guppy_bc_server: /home/r933r/data/software/users/snajder/guppy/ont-guppy-cpu/bin/guppy_basecall_server
+sniffles: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/opt/bin/sniffles
+
+per_batch: 9
+chroms: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, X, Y, MT]
+unique_samples: [180531DNA1, 18531DNA1]
+basecall_id: Basecall_1D_000
+mettypes: [cpg]

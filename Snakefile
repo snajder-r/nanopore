@@ -1,7 +1,8 @@
 import os
 import sys
-
-configfile: "medulloblastoma.yaml"
+import h5py
+import pandas as pd
+import numpy as np
 
 for k in config.keys():
     globals()[k] = config[k]
@@ -151,32 +152,38 @@ rule fast5_to_fastq:
         slots='1',
         misc=''
     run:
+        # Recursively finds fast5 files
+        def find_fast5(indir, fl=[]):
+            ll = os.listdir(indir)
+            for l in ll:
+                l = os.path.join(indir,l)
+                if os.path.isdir(l):
+                    fl = fl + find_fast5(l, fl)
+                elif l.endswith('.fast5'):
+                    fl.append(l)
+            return fl
 
-        ll = os.listdir(input[0])
-        for l in ll:
-            l = os.path.join(indir,l)
-            if os.path.isdir(l):
-                fl = fl + find_fast5(l, fl)
-            elif l.endswith('.fast5'):
-                fl.append(l)
+        indir = input[0]
+        fl = find_fast5(indir)
 
         fastq_group='Analyses/{basecall_id}/BaseCalled_template/Fastq'.format(
                         basecall_id=basecall_id)
-        with file(output[0],'w') as of:
+        with open(output[0],'w') as of:
             for fn in fl:
-                try:
+#                try:
                     with h5py.File(fn,'r') as f:
                         for read in f.keys():
+                            print(f[read].keys())
                             fq = f[read][fastq_group][()].decode('utf8')
                             fq = fq.split('\n')
                             if read.startswith('read_'):
                                 read = read[5:]
                             fq[0] = '@%s'%read
 
-                            of.write('\n'.join(fq), end='\n')
-                except:
-                    print('WARN: Could not read basecalls in %s'%fn)
-                    pass
+                            of.write('\n'.join(fq))
+#                except:
+#                    print('WARN: Could not read basecalls in %s'%fn)
+#                    pass
 
 rule all_fast5_to_fastq:
     input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=samples,  batch=batches)
@@ -302,14 +309,14 @@ rule merge_met_perchrom:
         pickle_file = output[0]
 
         sample_met = None
-        sample_batch_re = re.compile('(..)_(.*)_met_(.*)\.tsv')
+        sample_batch_re = re.compile('%s_(.*)_met_%s\.tsv' % (sample, mettype))
         for f in os.listdir(metcall_dir):
             mitch = sample_batch_re.match(f)
-            s = mitch.group(1)
-            batch = mitch.group(2)
-            mt = mitch.group(3)
-            if s != sample or mettype != mt:
+
+            if mitch is None:
                 continue
+
+            batch = mitch.group(1)
             
             print(f)
 
@@ -477,7 +484,7 @@ rule tombo_resquiggle:
     shell: '''
            {tombo} resquiggle --processes 32 --dna {input.directory} {reference};
            RESULT=$?
-           if $RESULT -eq 0; then touch {output}; fi
+           if [[ $RESULT -eq 0 ]] ; then touch {output}; fi
            exit $RESULT
            '''
 
