@@ -34,6 +34,11 @@ Note that in this pipeline, Megalodon is configured perform batchwise and in par
 GPU accellerated computation is supported, but in a setup where you have only few GPU resources
 and many CPU resources, the high paralellization of a CPU cluster is actually faster.
 
+### Sniffles:
+
+* Merges bam files per sample (since sniffles needs to be able to count evidence for SVs)
+* Performs SV-calling using sniffles
+
 ## Data structure:
 
 Please provide input data in the following structure. You only need to provide the *guppy* folder for the Nanopolish pipeline.
