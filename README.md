@@ -39,6 +39,23 @@ and many CPU resources, the high paralellization of a CPU cluster is actually fa
 * Merges bam files per sample (since sniffles needs to be able to count evidence for SVs)
 * Performs SV-calling using sniffles
 
+## Software requirements
+
+These are what I am using, but newer should also work:
+
+* python3.6
+  * pandas
+  * numpy
+  * h5py
+* nanopolish 0.11.1
+
+Optionally:
+
+* tombo
+* guppy
+* megalodon
+* sniffles 
+
 ## Data structure:
 
 Please provide input data in the following structure. You only need to provide the *guppy* folder for the Nanopolish pipeline.
