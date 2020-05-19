@@ -172,3 +172,24 @@ Some optional targets (partly experimental - may be unstable):
 * all_tombo_metcall: Performs methylation calling using tombo
 * all_report_methylation: Creates some histograms for methylation frequency (very global view on methylation, only useful if you know the expected methylation rate)
 
+
+### Guppy basecalling
+
+In case you want to re-basecall your fast5 files, the script '''basecall_guppy_gpucluster.py''' is specifically designed to run basecalling on the DKFZ GPU cluster, and is tailored to use a single GPU per sample in order to basecall reads in batches, while honoring the fair-use requirements of the DKFZ GPU cluster:
+
+* Honoring maximum scratch capacity by limiting number of fast5 files at a time
+* Copying data from network storage to scratch before performing basecalling
+* Only accessing data from scratch during computation
+* Copying data back to network storage and cleaning up scratch storage before running next batch 
+
+The script is also designed to be "restartable" in case the cluster job gets terminated (same fast5 files won't be basecalled again if restarted).
+
+Due to the nature of how picky the resource allocation is on the DKFZ GPU cluster, I did not yet integrate this in the Snakemake pipeline (so I have more control over it). Hence I did not yet make this script read the yaml config, so the path to guppy and the number of fast5 files are hardcoded. You can edit them at the top of the script. I found 15 to be 
+a good number of fast5 files, assuming a single fast5 file has 4000 reads.
+
+Usage (on the DKFZ cluster):
+
+~~~~
+bsub -q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G 'python basecall_guppy_gpucluster.py {basedir}/raw/<sample>/multi/ {basedir}/raw/<sample>/guppy/'
+~~~~
+
