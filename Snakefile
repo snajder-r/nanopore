@@ -7,6 +7,7 @@ import numpy as np
 for k in config.keys():
     globals()[k] = config[k]
 
+print(chroms)
 
 samples = []
 batches = []
@@ -442,6 +443,53 @@ rule megalodon:
 rule all_megalodon:
     input: expand(rules.megalodon.output, zip_combinator, sample=samples, batch=batches)
 
+'''
+#############################################################################
+# MEDAKA methylation calling
+#############################################################################
+
+This pipeline performs its own alignment (albeit also just using minimap2),
+which writes the methylation probabilities into the bam files
+'''
+
+'''
+Alignment and extraction of methylation probabilities
+'''
+rule medaka_align:
+    input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
+    output: bam=os.path.join(basedir, 'medaka/{sample}_{batch}.bam'),
+            index=os.path.join(basedir, 'medaka/{sample}_{batch}.bam.bai')
+    params:
+        jobname='medaka_align_{sample}_{batch}',
+        runtime='2:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]"',
+        misc=''
+    shell: '''
+           module load samtools;
+           {medaka} methylation guppy2sam {input} --reference {reference} --workers 31 --recursive | samtools sort -@ 8 | samtools view -b -@ 8 > {output.bam};
+           samtools index {output.bam};
+           '''
+
+rule all_medaka_align:
+    input: expand(rules.medaka_align.output, sample=samples, batch=batches)
+
+rule medaka_metcall:
+    input: rules.medaka_align.output.bam
+    output: os.path.join(basedir, 'medaka/{sample}_{batch}_met_{chrom}.tsv')
+    params:
+        jobname='medaka_metcall_{sample}_{batch}_{chrom}',
+        runtime='1:00',
+        memusage='16000',
+        slots='1',
+        misc=''
+    shell: '{medaka} methylation call --meth all {input} {reference} {wildcards.chrom}:0-10000000 {output}' 
+
+rule testmedaka:
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=['all'], batch=['0'], chrom=[chroms[0]])
+
+rule all_medaka_metcall:
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, chrom=chroms)
 
 '''
 ##############################################################################
@@ -479,7 +527,7 @@ rule tombo_resquiggle:
         jobname='tombo_resquiggle',
         runtime='48:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]',
+        slots='32 -R "span[hosts=1]"',
         misc=''
     shell: '''
            {tombo} resquiggle --processes 32 --dna {input.directory} {reference};
@@ -500,14 +548,37 @@ rule tombo_metcall:
         jobname='tombo_metcall',
         runtime='48:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]',
+        slots='32 -R "span[hosts=1]"',
         misc=''
     shell: '''
-           {tombo} detect_modification alternative_model --fast5-basedirs {input.directory} --statistics-file-basename {wildcards.sample} --alternate-bases 6mA 5mC --processes 32
+           {tombo} detect_modifications alternative_model --fast5-basedirs {input.directory} --statistics-file-basename {basedir}/tombo/{wildcards.sample} --alternate-bases 6mA 5mC --processes 32
            '''  
         
 rule all_tombo_metcall:
     input: expand(rules.tombo_metcall.output.stats_5mc, sample=unique_samples)
+
+'''
+Perform tombo methylation calling for 6mA and 5mC
+'''
+rule tombo_de_novo:
+    input: resquiggled=rules.tombo_resquiggle.output,
+           directory=rules.tombo_make_index.input
+    output: stats=os.path.join(basedir, 'tombo/{sample}_denovo.tombo.stats'),
+    params:
+        jobname='tombo_metcall',
+        runtime='48:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]"',
+        misc=''
+    shell: '''
+           {tombo} detect_modifications de_novo --fast5-basedirs {input.directory} --statistics-file-basename {basedir}/tombo/{wildcards.sample}_denovo --processes 32
+           '''  
+
+rule all_tombo_de_novo:
+    input: expand(rules.tombo_de_novo.output.stats, sample=unique_samples)
+
+
+
 
 '''
 ##############################################################################
