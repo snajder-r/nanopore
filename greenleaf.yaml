@@ -1,0 +1,21 @@
+basedir: /home/r933r/data/projects/nanopore/data/greenleaf/
+
+fast5_single_to_multi: /home/r933r/.conda/envs/gastrulation/bin/multi_to_single_fast5
+tombo: /home/r933r/.conda/envs/gastrulation/bin/tombo
+python: /home/r933r/.conda/envs/gastrulation/bin/python
+reference: /home/r933r/data/projects/nanopore/data/greenleaf/reference/ncbi-genomes-2020-02-26/GCF_000146045.2_R64_genomic.fna
+
+medaka: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/medaka/bin/medaka
+megalodon: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/bin/megalodon
+megalodon_calibration: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/lib/python3.7/site-packages/megalodon/model_data/dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg/megalodon_mod_calibration.npz
+guppy_bc_server: /home/r933r/data/software/users/snajder/guppy/ont-guppy-cpu/bin/guppy_basecall_server
+pycoQC: /home/r933r/.conda/envs/gastrulation/bin/pycoQC
+Fast5_to_seq_summary: /home/r933r/.conda/envs/gastrulation/bin/Fast5_to_seq_summary
+
+per_batch: 5
+chroms: [NC_001133.9, NC_001134.8, NC_001135.5, NC_001136.10, NC_001137.3, NC_001138.5, NC_001139.9, NC_001140.6, NC_001141.2, NC_001142.9, NC_001143.9, NC_001144.5, NC_001145.3, NC_001146.8, NC_001147.6, NC_001148.4, NC_001224.1]
+mettypes: [cpg, gpc, dam]
+basecall_id: '001'
+
+unique_samples: [all]
+
