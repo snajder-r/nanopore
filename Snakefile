@@ -8,7 +8,8 @@ for k in config.keys():
     globals()[k] = config[k]
 
 basecall_group = 'Basecall_1D_%s'%basecall_id
-print(basecall_group)
+if not 'unique_samples' in globals().keys():
+    unique_samples = os.listdir(os.path.join(basedir,'raw'))
 
 samples = []
 batches = []
@@ -72,6 +73,25 @@ def zip2_comb3_combinator(*args, **kwargs):
             #     wc1   -     wc2   -     wc3
             yield args[0][i], args[1][i], args[2][j]
 
+'''
+##############################################################################
+# GUPPY basecalling
+##############################################################################
+'''
+
+rule guppy_basecall:
+    input: os.path.join(basedir, 'raw', '{sample}', 'multi')
+    output: os.path.join(basedir, 'raw', '{sample}', 'guppy')
+    params:
+        jobname='guppy_{sample}',
+        runtime='48:00',
+        memusage='16000',
+        slots='1',
+        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G'
+    shell: '{python} basecall_guppy_gpucluster.py {input} {output}'
+
+rule all_guppy_basecall:
+    input: expand(rules.guppy_basecall.output, sample=unique_samples)
 
 '''
 ##############################################################################
