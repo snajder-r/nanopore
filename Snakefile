@@ -7,7 +7,8 @@ import numpy as np
 for k in config.keys():
     globals()[k] = config[k]
 
-print(chroms)
+basecall_group = 'Basecall_1D_%s'%basecall_id
+print(basecall_group)
 
 samples = []
 batches = []
@@ -94,7 +95,7 @@ This rule will be performed locally, as it is only creating symlinks and is
 not computationally expensive.
 '''
 rule split_batches:
-    output: directory(os.path.join(basedir,'raw/{sample}/batched/'))
+    output: directory(os.path.join(basedir,'raw','{sample}','batched'))
     run: 
         # Create "batched" directory if it doesn't exist
         if not os.path.exists(output[0]):
@@ -144,8 +145,8 @@ case we just skip that file and move on.
 '''
 
 rule fast5_to_fastq:
-    input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
-    output: os.path.join(basedir, 'fastq/{sample}_{batch}.fq')
+    input: rules.split_batches.output
+    output: os.path.join(basedir, 'fastq', '{sample}_{batch}.fq')
     params:
         jobname='fq_{sample}{batch}',
         runtime='03:00',
@@ -167,8 +168,8 @@ rule fast5_to_fastq:
         indir = input[0]
         fl = find_fast5(indir)
 
-        fastq_group='Analyses/{basecall_id}/BaseCalled_template/Fastq'.format(
-                        basecall_id=basecall_id)
+        fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
+                        basecall_group=basecall_group)
         with open(output[0],'w') as of:
             for fn in fl:
 #                try:
@@ -461,7 +462,7 @@ rule medaka_align:
             index=os.path.join(basedir, 'medaka/{sample}_{batch}.bam.bai')
     params:
         jobname='medaka_align_{sample}_{batch}',
-        runtime='2:00',
+        runtime='12:00',
         memusage='16000',
         slots='32 -R "span[hosts=1]"',
         misc=''
@@ -472,7 +473,7 @@ rule medaka_align:
            '''
 
 rule all_medaka_align:
-    input: expand(rules.medaka_align.output, sample=samples, batch=batches)
+    input: expand(rules.medaka_align.output, zip_combinator, sample=samples, batch=batches)
 
 rule medaka_metcall:
     input: rules.medaka_align.output.bam
@@ -516,6 +517,11 @@ rule tombo_make_index:
 
 '''
 Uses Tombo resquiggle to segment the raw signal and align it to the bases.
+Note that the output file ".single.resquiggled" does not really contain any
+information. It's only there as a marker that resquiggling has been performed.
+Tombo resquiggle modifies the input files, so the actual output is actually
+written into the inputfiles.
+
 CAVEAT: This manipulates the original fast5 files.
 '''
 rule tombo_resquiggle:
@@ -577,8 +583,25 @@ rule tombo_de_novo:
 rule all_tombo_de_novo:
     input: expand(rules.tombo_de_novo.output.stats, sample=unique_samples)
 
+'''
+#############################################################################
+# Use Adrien Ledger's pycoQC to generate quality reports
+#############################################################################
+'''
 
+rule fast5_to_seq_summary:
+    input: os.path.join(basedir,'raw/{sample}/guppy/')
+    output: os.path.join(basedir, 'raw/{sample}/guppy_summary.txt')
+    params:
+        jobname='fast5_to_seq_summary_{sample}',
+        runtime='24:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]"',
+        misc=''
+    shell: '{Fast5_to_seq_summary} --fast5_dir {input} --seq_summary_fn {output} --threads 32 --basecall_id {basecall_id}'
 
+rule all_fast5_to_seq_summary:
+    input: expand(rules.fast5_to_seq_summary.output, sample=unique_samples)
 
 '''
 ##############################################################################
