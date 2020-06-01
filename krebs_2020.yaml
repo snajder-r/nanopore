@@ -10,6 +10,8 @@ megalodon_calibration: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/minic
 guppy_bc_server: /home/r933r/data/software/users/snajder/guppy/ont-guppy-cpu/bin/guppy_basecall_server
 
 per_batch: 5
-chroms: [2L,2R,3L,3R,4,X,Y,mitochondrion_genome]
-justsamples: [invitro11_1, invitro12_1, invitro11_2, invitro12_2, footprinting]
-
+chroms: [2L,2R,3L,3R,4]
+unique_samples: [invitro11_1, invitro12_1, invitro11_2, invitro12_2, footprinting]
+#unique_samples: [invitro11_1, invitro12_1, footprinting]
+mettypes: [cpg,gpc,dam]
+basecall_id: '000'
