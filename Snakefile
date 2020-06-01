@@ -623,6 +623,23 @@ rule fast5_to_seq_summary:
 rule all_fast5_to_seq_summary:
     input: expand(rules.fast5_to_seq_summary.output, sample=unique_samples)
 
+rule pycoqc_report:
+    input: 
+        summary = rules.fast5_to_seq_summary.output,
+        bams = lambda wildcards: expand(rules.alignment.output, batch=samplebatches[wildcards.sample], sample=wildcards.sample)
+    output:
+        os.path.join(basedir, 'report', '{sample}_pycoqc.html')
+    params:
+        jobname='pycoqc_{sample}',
+        runtime='2:00',
+        memusage='16000',
+        slots='1',
+        misc=''
+    shell: '{pycoQC} -f {input.summary} --bam_file {input.bams} --html_outfile {output}'
+
+rule all_pycoqc_report:
+    input: expand(rules.pycoqc_report.output, sample=unique_samples)
+
 '''
 ##############################################################################
 # Reports methylation histograms - only really useful for benchmarking
