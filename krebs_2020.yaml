@@ -8,6 +8,8 @@ reference: /home/r933r/data/projects/nanopore/data/krebs_2020/reference/dmel-all
 megalodon: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/bin/megalodon
 megalodon_calibration: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/lib/python3.7/site-packages/megalodon/model_data/dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg/megalodon_mod_calibration.npz
 guppy_bc_server: /home/r933r/data/software/users/snajder/guppy/ont-guppy-cpu/bin/guppy_basecall_server
+pycoQC: /home/r933r/.conda/envs/gastrulation/bin/pycoQC
+Fast5_to_seq_summary: /home/r933r/.conda/envs/gastrulation/bin/Fast5_to_seq_summary
 
 per_batch: 5
 chroms: [2L,2R,3L,3R,4]
