@@ -115,19 +115,21 @@ directory, if you want to redo batch splitting.
 This rule will be performed locally, as it is only creating symlinks and is
 not computationally expensive.
 '''
-checkpoint split_batches:
+rule split_batches:
     output: directory(os.path.join(basedir,'raw','{sample}','batched','done'))
-    run:
+    params:
+        outdir=os.path.join(basedir,'raw','{sample}','batched')
+    run: 
         # Create "batched" directory if it doesn't exist
-        if not os.path.exists(output[0]):
-            os.mkdir(output[0])
+        if not os.path.exists(params.outdir):
+            os.mkdir(params.outdir)
         i = 0
         b = 0
         sample_dir = os.path.join(basedir,'raw/%s/guppy/' % wildcards.sample)
         print(sample_dir)
         raw_batches = os.listdir(sample_dir)
         while i < len(raw_batches):
-            batchdir=os.path.join(output[0], '%d'%b)
+            batchdir=os.path.join(params.outdir, '%d'%b)
             os.mkdir(batchdir)
             for _ in range(per_batch):
                 if i == len(raw_batches):
@@ -139,12 +141,11 @@ checkpoint split_batches:
                 i+=1
             b+=1
         update_batches()
-        with open(os.path.join(output[0],'done'), 'w') as fp: 
+        with open(output[0], 'w') as fp: 
             pass
 
 checkpoint all_split_batches:
     input: expand(rules.split_batches.output, sample=unique_samples)
-
 
 '''
 ##############################################################################
@@ -168,7 +169,7 @@ case we just skip that file and move on.
 '''
 
 rule fast5_to_fastq:
-    input: directory(os.path.join(basedir,'raw','{sample}','batched','{batch}'))
+    input: os.path.join(basedir,'raw','{sample}','batched', '{batch}')
     output: os.path.join(basedir, 'fastq', '{sample}_{batch}.fq')
     params:
         jobname='fq_{sample}{batch}',
