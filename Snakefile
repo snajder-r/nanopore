@@ -81,14 +81,15 @@ def zip2_comb3_combinator(*args, **kwargs):
 
 rule guppy_basecall:
     input: os.path.join(basedir, 'raw', '{sample}', 'multi')
-    output: os.path.join(basedir, 'raw', '{sample}', 'guppy')
+    output: os.path.join(basedir, 'raw', '{sample}', 'guppy','done')
     params:
+        outputdir= os.path.join(basedir, 'raw', '{sample}', 'guppy'),
         jobname='guppy_{sample}',
         runtime='48:00',
         memusage='16000',
         slots='1',
         misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G'
-    shell: '{python} basecall_guppy_gpucluster.py {input} {output}'
+    shell: '{python} basecall_guppy_gpucluster.py {input} {params.outputdir}'
 
 rule all_guppy_basecall:
     input: expand(rules.guppy_basecall.output, sample=unique_samples)
@@ -114,9 +115,9 @@ directory, if you want to redo batch splitting.
 This rule will be performed locally, as it is only creating symlinks and is
 not computationally expensive.
 '''
-rule split_batches:
-    output: directory(os.path.join(basedir,'raw','{sample}','batched'))
-    run: 
+checkpoint split_batches:
+    output: directory(os.path.join(basedir,'raw','{sample}','batched','done'))
+    run:
         # Create "batched" directory if it doesn't exist
         if not os.path.exists(output[0]):
             os.mkdir(output[0])
@@ -138,8 +139,10 @@ rule split_batches:
                 i+=1
             b+=1
         update_batches()
+        with open(os.path.join(output[0],'done'), 'w') as fp: 
+            pass
 
-rule all_split_batches:
+checkpoint all_split_batches:
     input: expand(rules.split_batches.output, sample=unique_samples)
 
 
@@ -165,11 +168,11 @@ case we just skip that file and move on.
 '''
 
 rule fast5_to_fastq:
-    input: rules.split_batches.output
+    input: directory(os.path.join(basedir,'raw','{sample}','batched','{batch}'))
     output: os.path.join(basedir, 'fastq', '{sample}_{batch}.fq')
     params:
         jobname='fq_{sample}{batch}',
-        runtime='03:00',
+        runtime='08:00',
         memusage='8000',
         slots='1',
         misc=''
@@ -195,7 +198,6 @@ rule fast5_to_fastq:
 #                try:
                     with h5py.File(fn,'r') as f:
                         for read in f.keys():
-                            print(f[read].keys())
                             fq = f[read][fastq_group][()].decode('utf8')
                             fq = fq.split('\n')
                             if read.startswith('read_'):
@@ -290,11 +292,11 @@ rule metcall:
     output: os.path.join(basedir, 'met/{sample}_{batch}_met_{mtype}.tsv')
     params:
         jobname='metcall_{sample}_{batch}',
-        runtime='08:00',
-        memusage='8000',
-        slots='8 -R "span[hosts=1]"',
+        runtime='16:00',
+        memusage='16000',
+        slots='1 -R "span[hosts=1]"',
         misc=''
-    shell: 'nanopolish call-methylation -t 8 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
+    shell: 'nanopolish call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
 rule all_metcall:
     input: expand(rules.metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, mtype=mettypes)
@@ -482,7 +484,7 @@ rule medaka_align:
             index=os.path.join(basedir, 'medaka/{sample}_{batch}.bam.bai')
     params:
         jobname='medaka_align_{sample}_{batch}',
-        runtime='12:00',
+        runtime='18:00',
         memusage='16000',
         slots='32 -R "span[hosts=1]"',
         misc=''
@@ -500,7 +502,7 @@ rule medaka_metcall:
     output: os.path.join(basedir, 'medaka/{sample}_{batch}_met_{chrom}.tsv')
     params:
         jobname='medaka_metcall_{sample}_{batch}_{chrom}',
-        runtime='1:00',
+        runtime='2:00',
         memusage='16000',
         slots='1',
         misc=''

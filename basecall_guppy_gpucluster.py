@@ -63,3 +63,6 @@ for batch_i in range(len(batches)):
     print("Cleaning up %s" % ssd_out)
     shutil.rmtree(ssd_out)
     shutil.rmtree(ssd_in)
+
+with open(os.path.join(outputdir,'done'), 'w') as fp: 
+    pass
