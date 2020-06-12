@@ -318,9 +318,9 @@ rule merge_met_perchrom:
     input: merge_met_perchrom_input
     output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
     params:
-        jobname='mergemet_{chrom}',
-        runtime='8:00',
-        memusage='32000',
+        jobname='mergemet_{sample}_{chrom}',
+        runtime='12:00',
+        memusage='24000',
         slots='1',
         misc=''
     run:
@@ -340,19 +340,17 @@ rule merge_met_perchrom:
 
             batch = mitch.group(1)
             
-            print(f)
-
-            lmet = pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, 
+            for lmet in pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, chunksize=1000000,
                                dtype={'chromosome':'category', 
                                       'strand':'category', 
                                       'num_calling_strands':np.uint8, 
-                                      'num_motifs':np.uint8})
+                                      'num_motifs':np.uint8}):
 
-            lmet = lmet.loc[lmet.chromosome==chrom]
-            if sample_met is None:
-                sample_met = lmet
-            else:
-                sample_met = pd.concat((sample_met, lmet))
+                lmet = lmet.loc[lmet.chromosome==chrom].copy()
+                if sample_met is None:
+                    sample_met = lmet
+                else:
+                    sample_met = pd.concat((sample_met, lmet))
 
         sample_met.to_pickle(pickle_file, compression='gzip')
 
@@ -392,7 +390,7 @@ rule mergebams:
     params:
         jobname='mergebam_{sample}',
         runtime='09:59',
-        memusage='32000',
+        memusage='64000',
         slots='1',
         misc=''
     shell: '''
