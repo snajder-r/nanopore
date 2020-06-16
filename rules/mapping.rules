@@ -25,7 +25,7 @@ rule alignment:
         misc=''
     shell: '''
            module load samtools
-           minimap2 -a -x map-ont {reference} {input} | samtools view -q 1 -b | samtools sort -T {output}.tmp -o {output}
+           {minimap2} -a -x map-ont {reference} {input} | samtools view -q 1 -b | samtools sort -T {output}.tmp -o {output}
            samtools index {output}
            '''
 

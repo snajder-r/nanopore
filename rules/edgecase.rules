@@ -1,0 +1,28 @@
+'''
+##############################################################################
+# Mapping using minimap2
+##############################################################################
+
+This rule will map fastq file for a single sample and batch to the extended 
+reference that contains *subtelomere* sequences.
+'''
+
+rule telomere_extended_alignment:
+    input: rules.fast5_to_fastq.output
+    output: os.path.join(basedir,'telomeres/mapping/{sample}_{batch}.bam')
+    params:
+        jobname='edgecase_align_{sample}_{batch}',
+        runtime='09:00',
+        memusage='4000',
+        slots='1',
+        misc=''
+    shell: '''
+           {minimap2} -a -x map-ont {edgecase_extended_reference} {input} | {samtools} view -b > {output}
+           {samtools} index {output}
+           '''
+
+rule all_telomere_extended_alignment:
+    input: expand(rules.telomere_extended_alignment.output, zip_combinator, sample=samples, batch=batches)
+
+rule test:
+    input: expand(rules.telomere_extended_alignment.output, sample='Relapse', batch='0')

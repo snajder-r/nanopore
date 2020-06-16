@@ -136,6 +136,7 @@ include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
 include: 'rules/tombo.rules'
+include: 'rules/edgecase.rules'
 
 '''
 ##############################################################################
