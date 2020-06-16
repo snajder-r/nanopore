@@ -1,0 +1,114 @@
+'''
+##############################################################################
+# Methylation calling using nanopolish
+##############################################################################
+'''
+
+'''
+In preparation for nanopolish methylation calling, raw fast5 entries 
+for each read in the fastq files are indexed so they can be accessed more 
+efficiently by nanopolish.
+
+The output files will be created within the fastq directory 
+(with .index.readdb suffix for each fq file) 
+'''
+rule nanopolish_index:
+    input:
+        f5=os.path.join(basedir, 'raw/{sample}/batched/{batch}/'),
+        fq=rules.fast5_to_fastq.output
+    output: os.path.join(basedir, 'fastq/{sample}_{batch}.fq.index.readdb')
+    params:
+        jobname='npidx_{sample}_{batch}',
+        runtime='08:00',
+        memusage='2000',
+        slots='1',
+        misc=''
+    shell: 'nanopolish index -d {input.f5} {input.fq}'
+
+rule all_nanopolish_index:
+    input: expand(rules.nanopolish_index.output, zip_combinator, sample=samples, batch=batches)
+
+
+'''
+Performs methylation calling using nanopolish for one sample and batch, for
+one type of methylation call (the "mtype" wildcard). The "mtype" wildcard 
+could be one of "cpg", "gpc", or "dam".
+
+The output will be stored in the "met" directory in tsv format.
+'''
+rule metcall:
+    input: 
+        fq=rules.fast5_to_fastq.output,
+        bam=rules.alignment.output,
+        fqidx=rules.nanopolish_index.output
+    output: os.path.join(basedir, 'met/{sample}_{batch}_met_{mtype}.tsv')
+    params:
+        jobname='metcall_{sample}_{batch}',
+        runtime='16:00',
+        memusage='16000',
+        slots='1 -R "span[hosts=1]"',
+        misc=''
+    shell: 'nanopolish call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
+
+rule all_metcall:
+    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, mtype=mettypes)
+
+'''
+This merges the nanopolish methylation calls, loads it into a pandas dataframe
+and stores it in pickled format.
+
+Note that this job is performed per sample per chromosome. It will save one
+outputfile for a sample,chromosome,methylation type combination, in order to 
+break up the data and make it easier to load loater.
+
+So while it merges batches, it also splits up chromosomes.
+'''
+def merge_met_perchrom_input(wildcards):
+    return expand(os.path.join(basedir, 
+        'met/%s_{batch}_met_%s.tsv' % (wildcards.sample, wildcards.mettype)),
+        batch=samplebatches[wildcards.sample])
+
+rule merge_met_perchrom:
+    input: merge_met_perchrom_input
+    output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
+    params:
+        jobname='mergemet_{sample}_{chrom}',
+        runtime='12:00',
+        memusage='24000',
+        slots='1',
+        misc=''
+    run:
+        metcall_dir = os.path.join(basedir, 'met') 
+        sample = wildcards['sample']
+        chrom = wildcards['chrom']
+        mettype = wildcards['mettype']
+        pickle_file = output[0]
+
+        sample_met = None
+        sample_batch_re = re.compile('%s_(.*)_met_%s\.tsv' % (sample, mettype))
+        for f in os.listdir(metcall_dir):
+            mitch = sample_batch_re.match(f)
+
+            if mitch is None:
+                continue
+
+            batch = mitch.group(1)
+            
+            for lmet in pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, chunksize=1000000,
+                               dtype={'chromosome':'category', 
+                                      'strand':'category', 
+                                      'num_calling_strands':np.uint8, 
+                                      'num_motifs':np.uint8}):
+
+                lmet = lmet.loc[lmet.chromosome==chrom].copy()
+                if sample_met is None:
+                    sample_met = lmet
+                else:
+                    sample_met = pd.concat((sample_met, lmet))
+
+        sample_met.to_pickle(pickle_file, compression='gzip')
+
+rule all_merge_met_perchrom:
+    input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
+
+

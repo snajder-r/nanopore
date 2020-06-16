@@ -1,0 +1,47 @@
+'''
+#############################################################################
+# MEDAKA methylation calling
+#############################################################################
+
+This pipeline performs its own alignment (albeit also just using minimap2),
+which writes the methylation probabilities into the bam files
+'''
+
+'''
+Alignment and extraction of methylation probabilities
+'''
+rule medaka_align:
+    input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
+    output: bam=os.path.join(basedir, 'medaka/{sample}_{batch}.bam'),
+            index=os.path.join(basedir, 'medaka/{sample}_{batch}.bam.bai')
+    params:
+        jobname='medaka_align_{sample}_{batch}',
+        runtime='18:00',
+        memusage='16000',
+        slots='32 -R "span[hosts=1]"',
+        misc=''
+    shell: '''
+           module load samtools;
+           {medaka} methylation guppy2sam {input} --reference {reference} --workers 31 --recursive | samtools sort -@ 8 | samtools view -b -@ 8 > {output.bam};
+           samtools index {output.bam};
+           '''
+
+rule all_medaka_align:
+    input: expand(rules.medaka_align.output, zip_combinator, sample=samples, batch=batches)
+
+rule medaka_metcall:
+    input: rules.medaka_align.output.bam
+    output: os.path.join(basedir, 'medaka/{sample}_{batch}_met_{chrom}.tsv')
+    params:
+        jobname='medaka_metcall_{sample}_{batch}_{chrom}',
+        runtime='2:00',
+        memusage='16000',
+        slots='1',
+        misc=''
+    shell: '{medaka} methylation call --meth all {input} {reference} {wildcards.chrom}:0-10000000 {output}' 
+
+rule testmedaka:
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=['all'], batch=['0'], chrom=[chroms[0]])
+
+rule all_medaka_metcall:
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, chrom=chroms)

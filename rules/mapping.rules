@@ -1,0 +1,77 @@
+'''
+##############################################################################
+# Mapping using minimap2
+##############################################################################
+
+This rule will map fastq file for a single sample and batch to the reference. 
+
+Output will be stored in the "mapping" directory as a bam file including a 
+bai index file.
+
+The following steps are performed:
+  - Alignment
+  - Filter only unique mappings
+  - Sort bam file
+  - Create bam index
+'''
+rule alignment:
+    input: rules.fast5_to_fastq.output
+    output: os.path.join(basedir,'mapping/{sample}_{batch}.sorted.filtered.bam')
+    params:
+        jobname='align_{sample}_{batch}',
+        runtime='09:00',
+        memusage='2000',
+        slots='1',
+        misc=''
+    shell: '''
+           module load samtools
+           minimap2 -a -x map-ont {reference} {input} | samtools view -q 1 -b | samtools sort -T {output}.tmp -o {output}
+           samtools index {output}
+           '''
+
+rule all_alignment:
+    input: expand(rules.alignment.output, zip_combinator, sample=samples, batch=batches)
+
+'''
+##############################################################################
+# Merging of BAM files
+##############################################################################
+
+In case you need a single bam file for one sample (e.g. for SV calling), this 
+rule performs the merging and re-sorting of bam files. The 
+prepare_mergebams_input function returns the list of bam files, which will 
+then in an intermediate step be saved to a txt. 
+
+The following steps are performed:
+ - Create filelist file
+ - Merge using samtools merge
+ - Use calmd to re-generate the MD tag for the merged bam file
+ - Re-sort using samtools sort  (not sure if this is necessary after merge)
+'''
+def prepare_mergebams_input(wildcards):
+    return expand((os.path.join(basedir, 'mapping/%s' % wildcards.sample) + 
+        '_{batch}.sorted.filtered.bam'), 
+        batch=samplebatches[wildcards.sample])
+
+rule prepare_mergebams:
+    input: prepare_mergebams_input
+    output: os.path.join(basedir, 'mapping/{sample}.bam.filelist.txt')
+    shell: 'echo {input} | sed \'s/ /\\n/g\' > {output}'
+
+rule mergebams:
+    input: rules.prepare_mergebams.output
+    output: os.path.join(basedir, 'mapping/{sample}.sorted.bam')
+    params:
+        jobname='mergebam_{sample}',
+        runtime='09:59',
+        memusage='64000',
+        slots='1',
+        misc=''
+    shell: '''
+           module load samtools
+           samtools merge -b {input} - | samtools calmd -b - {reference} | samtools sort -T {output}.tmp -o {output}
+           '''
+
+rule all_mergebams:
+    input: expand(rules.mergebams.output, sample=unique_samples)
+

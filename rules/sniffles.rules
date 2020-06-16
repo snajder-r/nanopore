@@ -1,0 +1,28 @@
+'''
+##############################################################################
+# Calling of SVs using sniffles
+##############################################################################
+
+Uses merged bams as input. Since sniffles considers the amount of evidence 
+for an SV, it is important that it has access to all reads, hence it needs a
+merged bam file. Therefore it depends on the mergebams rule and can run only
+per sample and not batchwise.
+'''
+rule varcall:
+    input:
+        bam=rules.mergebams.output
+    output: os.path.join(basedir, 'var/{sample}_sv.vcf')
+    params:
+        jobname='varcall_{sample}',
+        runtime='24:00',
+        memusage='16000',
+        slots='16 -R "span[hosts=1]"',
+        misc=''
+    shell: '''
+           module load gcc/5.4.0
+           {sniffles} -s 4 -t 16 -m {input} -v {output}
+           '''
+
+rule all_varcall:
+    input: expand(rules.varcall.output, sample=unique_samples)
+

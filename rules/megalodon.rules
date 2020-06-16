@@ -1,0 +1,33 @@
+'''
+##############################################################################
+# Methylation calling using Megalodon
+##############################################################################
+
+Use Megalodon without GPU support to perform methylation calling. This 
+requires guppy methylation called fast5 files.
+
+The config file must contain the megalodon_calibration, which points to the
+calibration filename specific to the machine and modification type.
+
+Also requires the path to the guppy basecalling server in the "guppy" 
+variable.
+
+While Megalodon supports GPU computation, I found it is typically faster to do
+batched CPU computations, since I can do more parallelization than using the
+limited number of GPUs available on the DKFZ cluster.
+'''
+rule megalodon:
+    input: os.path.join(basedir, 'raw/{sample}/batched/{batch}/')
+    output: os.path.join(basedir, 'megalodon/{sample}/{batch}/basecalls.modified_base_scores.hdf5')
+    params: 
+        jobname='megalodon_{sample}_{batch}',
+        runtime='48:00',
+        memusage='16000',
+        slots='16 -R "span[hosts=1]"',
+        misc=''
+    shell: '{megalodon} --guppy-params "--cpu_threads_per_caller 16" --guppy-server-path {guppy} --overwrite --output-directory %s --mod-calibration-filename {megalodon_calibration} --outputs=mod_basecalls {input}' % os.path.join(basedir, 'megalodon/{wildcards.sample}/{wildcards.batch}/')
+
+rule all_megalodon:
+    input: expand(rules.megalodon.output, zip_combinator, sample=samples, batch=batches)
+
+

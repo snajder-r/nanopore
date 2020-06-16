@@ -1,0 +1,22 @@
+'''
+##############################################################################
+# GUPPY basecalling
+##############################################################################
+'''
+
+rule guppy_basecall:
+    input: os.path.join(basedir, 'raw', '{sample}', 'multi')
+    output: os.path.join(basedir, 'raw', '{sample}', 'guppy','done')
+    params:
+        outputdir= os.path.join(basedir, 'raw', '{sample}', 'guppy'),
+        jobname='guppy_{sample}',
+        runtime='48:00',
+        memusage='16000',
+        slots='1',
+        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G'
+    shell: '{python} basecall_guppy_gpucluster.py {input} {params.outputdir}'
+
+rule all_guppy_basecall:
+    input: expand(rules.guppy_basecall.output, sample=unique_samples)
+
+
