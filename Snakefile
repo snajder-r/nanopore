@@ -39,6 +39,11 @@ update_batches()
 print(samplebatches)
 
 
+if os.path.exists(os.path.join(basedir, 'fastq')):
+    sbf = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}', '{filename}.fastq'))
+else:
+    sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched',  '{batch}', '{filename}.fast5'))
+
 '''
 ##############################################################################
 # Combinators 
@@ -94,17 +99,49 @@ directory, if you want to redo batch splitting.
 This rule will be performed locally, as it is only creating symlinks and is
 not computationally expensive.
 '''
+
+def split_batches(all_files,  outdir):
+    # Create "batched" directory if it doesn't exist
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+    i = 0
+    b = 0
+    #sample_dir = os.path.join(basedir,'raw/%s/guppy/' % wildcards.sample)
+    #print(sample_dir)
+    raw_batches = os.listdir(sample_dir)
+    while i < len(raw_batches):
+        batchdir=os.path.join(params.outdir, '%d'%b)
+        os.mkdir(batchdir)
+        for _ in range(per_batch):
+            if i == len(raw_batches):
+                 break
+            src=os.path.join(basedir, os.path.join(sample_dir, 
+                             raw_batches[i]))
+            dst=os.path.join(batchdir, '%s' % raw_batches[i])
+            os.symlink(src,dst)
+            i+=1
+        b+=1
+    with open(output[0], 'w') as fp: 
+        pass
+
+
+
 rule split_batches:
-    output: directory(os.path.join(basedir,'raw','{sample}','batched','done'))
+    output: os.path.join(basedir,'raw','{sample}','batched','done')
     params:
         outdir=os.path.join(basedir,'raw','{sample}','batched')
+    run: 
+rule split_batches_from_fastq:
+    output: os.path.join(basedir,'fastq','{sample}','batched','done')
+    params:
+        outdir=os.path.join(basedir,'fastq','{sample}','batched')
     run: 
         # Create "batched" directory if it doesn't exist
         if not os.path.exists(params.outdir):
             os.mkdir(params.outdir)
         i = 0
         b = 0
-        sample_dir = os.path.join(basedir,'raw/%s/guppy/' % wildcards.sample)
+        sample_dir = os.path.join(basedir,'fastq/%s/guppy/' % wildcards.sample)
         print(sample_dir)
         raw_batches = os.listdir(sample_dir)
         while i < len(raw_batches):
@@ -119,12 +156,15 @@ rule split_batches:
                 os.symlink(src,dst)
                 i+=1
             b+=1
-        update_batches()
         with open(output[0], 'w') as fp: 
             pass
 
+
 checkpoint all_split_batches:
     input: expand(rules.split_batches.output, sample=unique_samples)
+
+checkpoint all_split_batches_from_fastq:
+    input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 
 include: 'rules/fastq.rules'
@@ -164,4 +204,4 @@ rule report_methylation:
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
 
-localrules: prepare_mergebams, split_batches
+localrules: prepare_mergebams, split_batches, split_batches_from_fastq

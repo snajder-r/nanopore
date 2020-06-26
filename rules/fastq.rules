@@ -19,49 +19,35 @@ done because guppy will sometimes file to produce basecalls, and is such a
 case we just skip that file and move on.
 '''
 
+def fast5_to_fastq_input(wildcards):
+    indir = os.path.join(basedir,'raw','{sample}','batched', '{batch}')
+    for f in os.listdir(indir):
+        f_path = os.path.join(indir, f)
+        yield f_path
+
 rule fast5_to_fastq:
-    input: os.path.join(basedir,'raw','{sample}','batched', '{batch}')
-    output: os.path.join(basedir, 'fastq', '{sample}_{batch}.fq')
+    input: os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5')
+    output: os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}', '{filename}.fastq')
     params:
         jobname='fq_{sample}{batch}',
-        runtime='08:00',
-        memusage='8000',
+        runtime='10:00',
+        memusage='1000',
         slots='1',
         misc=''
     run:
-        # Recursively finds fast5 files
-        def find_fast5(indir, fl=[]):
-            ll = os.listdir(indir)
-            for l in ll:
-                l = os.path.join(indir,l)
-                if os.path.isdir(l):
-                    fl = fl + find_fast5(l, fl)
-                elif l.endswith('.fast5'):
-                    fl.append(l)
-            return fl
-
-        indir = input[0]
-        fl = find_fast5(indir)
-
         fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
                         basecall_group=basecall_group)
-        with open(output[0],'w') as of:
-            for fn in fl:
-#                try:
-                    with h5py.File(fn,'r') as f:
-                        for read in f.keys():
-                            fq = f[read][fastq_group][()].decode('utf8')
-                            fq = fq.split('\n')
-                            if read.startswith('read_'):
-                                read = read[5:]
-                            fq[0] = '@%s'%read
+        with open(output[0],'w') as of, h5py.File(input[0],'r') as f:
+            for read in f.keys():
+                fq = f[read][fastq_group][()].decode('utf8')
+                fq = fq.split('\n')
+                if read.startswith('read_'):
+                    read = read[5:]
+                fq[0] = '@%s'%read
 
-                            of.write('\n'.join(fq))
-#                except:
-#                    print('WARN: Could not read basecalls in %s'%fn)
-#                    pass
+                of.write('\n'.join(fq))
 
-rule all_fast5_to_fastq:
-    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=samples,  batch=batches)
+checkpoint all_fast5_to_fastq:
+    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sample,  batch=sbf.batch, filename=sbf.filename)
 
 
