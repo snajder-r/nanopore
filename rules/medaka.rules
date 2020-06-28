@@ -27,7 +27,7 @@ rule medaka_align:
            '''
 
 rule all_medaka_align:
-    input: expand(rules.medaka_align.output, zip_combinator, sample=samples, batch=batches)
+    input: expand(rules.medaka_align.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
 
 rule medaka_metcall:
     input: rules.medaka_align.output.bam
@@ -44,4 +44,4 @@ rule testmedaka:
     input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=['all'], batch=['0'], chrom=[chroms[0]])
 
 rule all_medaka_metcall:
-    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, chrom=chroms)
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=sbf.sample, batch=sbf.batch, chrom=chroms)

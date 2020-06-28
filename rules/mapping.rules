@@ -30,7 +30,7 @@ rule alignment:
            '''
 
 rule all_alignment:
-    input: expand(rules.alignment.output, zip_combinator, sample=samples, batch=batches)
+    input: expand(rules.alignment.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
 
 '''
 ##############################################################################

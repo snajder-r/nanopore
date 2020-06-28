@@ -11,9 +11,6 @@ basecall_group = 'Basecall_1D_%s'%basecall_id
 if not 'unique_samples' in globals().keys():
     unique_samples = os.listdir(os.path.join(basedir,'raw'))
 
-samples = []
-batches = []
-
 '''
 Detect batches for each sample. Fills the global variables:
   samples: flat array of length num_samples x num_batches
@@ -23,26 +20,14 @@ Detect batches for each sample. Fills the global variables:
 samples and batches are filled such that zip(samples,batches) would result
 in the full list of sample and batch tuples.
 '''
-samplebatches = dict()
-def update_batches():
-    for s in unique_samples:
-        samplebatches[s] = []
-        batchdir=os.path.join(basedir,'raw', s,'batched')
-        if os.path.exists(batchdir):
-            for b in os.listdir(batchdir):
-                if os.path.isdir(os.path.join(batchdir,b)):
-                    samples.append(s)
-                    batches.append(b)
-                    samplebatches[s].append(b)
-
-update_batches()
-print(samplebatches)
-
 
 if os.path.exists(os.path.join(basedir, 'fastq')):
     sbf = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}', '{filename}.fastq'))
 else:
     sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched',  '{batch}', '{filename}.fast5'))
+
+def samplebatches(sample):
+    return [sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]
 
 '''
 ##############################################################################
@@ -100,62 +85,49 @@ This rule will be performed locally, as it is only creating symlinks and is
 not computationally expensive.
 '''
 
-def split_batches(all_files,  outdir):
+def split_batches_from_file_list(all_files,  outdir):
     # Create "batched" directory if it doesn't exist
     if not os.path.exists(outdir):
         os.mkdir(outdir)
     i = 0
     b = 0
-    #sample_dir = os.path.join(basedir,'raw/%s/guppy/' % wildcards.sample)
-    #print(sample_dir)
-    raw_batches = os.listdir(sample_dir)
-    while i < len(raw_batches):
-        batchdir=os.path.join(params.outdir, '%d'%b)
+    while i < len(all_files):
+        batchdir=os.path.join(outdir, '%d'%b)
         os.mkdir(batchdir)
         for _ in range(per_batch):
-            if i == len(raw_batches):
+            if i == len(all_files):
                  break
-            src=os.path.join(basedir, os.path.join(sample_dir, 
-                             raw_batches[i]))
-            dst=os.path.join(batchdir, '%s' % raw_batches[i])
-            os.symlink(src,dst)
+            link=os.path.join(batchdir, '%s' % os.path.basename(all_files[i]))
+            os.symlink(all_files[i], link)
             i+=1
         b+=1
-    with open(output[0], 'w') as fp: 
-        pass
 
+def split_batches_input(wildcards):
+    file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy', '{fname}.fast5')
+    return expand(file_path, fname=glob_wildcards(file_path).fname)
 
-
-rule split_batches:
+checkpoint split_batches:
+    input: split_batches_input
     output: os.path.join(basedir,'raw','{sample}','batched','done')
     params:
         outdir=os.path.join(basedir,'raw','{sample}','batched')
     run: 
-rule split_batches_from_fastq:
+        split_batches_from_file_list(input, params.outdir)
+        with open(output[0], 'w') as fp: 
+            pass
+
+        
+def split_batches_from_fastq_input(wildcards):
+    file_path = os.path.join(basedir, 'fastq', wildcards['sample'], 'guppy', '{fname}.fq')
+    return expand(file_path, fname=glob_wildcards(file_path.fname))
+
+checkpoint split_batches_from_fastq:
+    input: split_batches_from_fastq_input
     output: os.path.join(basedir,'fastq','{sample}','batched','done')
     params:
         outdir=os.path.join(basedir,'fastq','{sample}','batched')
     run: 
-        # Create "batched" directory if it doesn't exist
-        if not os.path.exists(params.outdir):
-            os.mkdir(params.outdir)
-        i = 0
-        b = 0
-        sample_dir = os.path.join(basedir,'fastq/%s/guppy/' % wildcards.sample)
-        print(sample_dir)
-        raw_batches = os.listdir(sample_dir)
-        while i < len(raw_batches):
-            batchdir=os.path.join(params.outdir, '%d'%b)
-            os.mkdir(batchdir)
-            for _ in range(per_batch):
-                if i == len(raw_batches):
-                     break
-                src=os.path.join(basedir, os.path.join(sample_dir, 
-                                 raw_batches[i]))
-                dst=os.path.join(batchdir, '%s' % raw_batches[i])
-                os.symlink(src,dst)
-                i+=1
-            b+=1
+        split_batches_from_file_list(input, params.outdir)
         with open(output[0], 'w') as fp: 
             pass
 

@@ -26,7 +26,7 @@ rule nanopolish_index:
     shell: 'nanopolish index -d {input.f5} {input.fq}'
 
 rule all_nanopolish_index:
-    input: expand(rules.nanopolish_index.output, zip_combinator, sample=samples, batch=batches)
+    input: expand(rules.nanopolish_index.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
 
 
 '''
@@ -51,7 +51,7 @@ rule metcall:
     shell: 'nanopolish call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
 rule all_metcall:
-    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=samples, batch=batches, mtype=mettypes)
+    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sbf.sample, batch=sbf.batch, mtype=mettypes)
 
 '''
 This merges the nanopolish methylation calls, loads it into a pandas dataframe

@@ -20,14 +20,14 @@ case we just skip that file and move on.
 '''
 
 def fast5_to_fastq_input(wildcards):
-    indir = os.path.join(basedir,'raw','{sample}','batched', '{batch}')
-    for f in os.listdir(indir):
-        f_path = os.path.join(indir, f)
-        yield f_path
+    indir = os.path.join(basedir,'raw',wildcards['sample'],'batched', wildcards['batch'])
+    for i in range(len(sbf.filename)):
+        if sbf.sample[i] == wildcards['sample'] and sbf.batch[i] == wildcards['batch']:
+            yield os.path.join(indir, '%s.fast5'%sbf.filename[i])
 
 rule fast5_to_fastq:
-    input: os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5')
-    output: os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}', '{filename}.fastq')
+    input: fast5_to_fastq_input
+    output: os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}.fastq')
     params:
         jobname='fq_{sample}{batch}',
         runtime='10:00',
@@ -37,17 +37,18 @@ rule fast5_to_fastq:
     run:
         fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
                         basecall_group=basecall_group)
-        with open(output[0],'w') as of, h5py.File(input[0],'r') as f:
-            for read in f.keys():
-                fq = f[read][fastq_group][()].decode('utf8')
-                fq = fq.split('\n')
-                if read.startswith('read_'):
-                    read = read[5:]
-                fq[0] = '@%s'%read
-
-                of.write('\n'.join(fq))
+        with open(output[0],'w') as of:
+            for i in range(len(input)):
+                with h5py.File(input[i],'r') as f:
+                    for read in f.keys():
+                        fq = f[read][fastq_group][()].decode('utf8')
+                        fq = fq.split('\n')
+                        if read.startswith('read_'):
+                            read = read[5:]
+                        fq[0] = '@%s'%read
+                        of.write('\n'.join(fq))
 
 checkpoint all_fast5_to_fastq:
-    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sample,  batch=sbf.batch, filename=sbf.filename)
+    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sample,  batch=sbf.batch)
 
 
