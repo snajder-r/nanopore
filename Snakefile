@@ -10,6 +10,8 @@ for k in config.keys():
 basecall_group = 'Basecall_1D_%s'%basecall_id
 if not 'unique_samples' in globals().keys():
     unique_samples = os.listdir(os.path.join(basedir,'raw'))
+if not 'fastq_ending' in globals().keys():
+    fastq_ending = 'fq'
 
 '''
 Detect batches for each sample. Fills the global variables:
@@ -21,13 +23,14 @@ samples and batches are filled such that zip(samples,batches) would result
 in the full list of sample and batch tuples.
 '''
 
-if os.path.exists(os.path.join(basedir, 'fastq')):
-    sbf = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}', '{filename}.fastq'))
-else:
-    sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched',  '{batch}', '{filename}.fast5'))
+sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s'%fastq_ending))
+sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched',  '{batch}', '{filename}.fast5'))
 
 def samplebatches(sample):
-    return [sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]
+    if len(sb.sample) == 0:
+        return [sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]
+    else:
+        return [sb.batch[i] for i in range(len(sb.batch)) if sb.sample[i] == sample]
 
 '''
 ##############################################################################
@@ -118,7 +121,7 @@ checkpoint split_batches:
 
         
 def split_batches_from_fastq_input(wildcards):
-    file_path = os.path.join(basedir, 'fastq', wildcards['sample'], 'guppy', '{fname}.fq')
+    file_path = os.path.join(basedir, 'fastq', wildcards['sample'], 'guppy', '{fname}.%s' % fastq_ending)
     return expand(file_path, fname=glob_wildcards(file_path.fname))
 
 checkpoint split_batches_from_fastq:
@@ -150,6 +153,9 @@ include: 'rules/sniffles.rules'
 include: 'rules/tombo.rules'
 include: 'rules/edgecase.rules'
 
+
+include: 'rules.d/custom.rules'
+
 '''
 ##############################################################################
 # Reports methylation histograms - only really useful for benchmarking
@@ -175,5 +181,9 @@ rule report_methylation:
 
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
+
+rule test:
+#    input: '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/fastq/Germline/0.fastq.index.readdb'
+    input: '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/mapping_chr11_chr17/Germline/124.sorted.filtered.bam'
 
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq

@@ -1,4 +1,4 @@
-basedir: /hps/nobackup/research/stegle/users/snajder/medulloblastoma/
+basedir: /hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/
 
 minimap2: /hps/nobackup/research/stegle/users/snajder/software/minimap2/minimap2
 samtools: /hps/nobackup/research/stegle/users/snajder/software/samtools/bin/samtools
@@ -7,7 +7,8 @@ nanopolish: /hps/nobackup/research/stegle/users/snajder/software/nanopolish/nano
 #fast5_single_to_multi: /home/r933r/.conda/envs/gastrulation/bin/multi_to_single_fast5
 #tombo: /home/r933r/.conda/envs/gastrulation/bin/tombo
 python: /homes/snajder/miniconda3/envs/py37/bin/python
-#reference: /home/r933r/snajder/nanopore/data/medulloblastoma_dna/reference/Homo_sapiens.GRCh38.dna_rm.primary_assembly.fa
+reference: /hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/assembly_tobias/wtdbg2.genome.ctg.fa
+reference_chr11_chr17: /hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/assembly_tobias/haplotype_specific.chr11.chr17.ctg.fa
 
 #megalodon: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/bin/megalodon
 #megalodon_calibration: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/megalodon/lib/python3.7/site-packages/megalodon/model_data/dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg/megalodon_mod_calibration.npz
@@ -21,3 +22,4 @@ chroms: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 
 unique_samples: [Germline,Primary,Relapse]
 basecall_id: '000'
 mettypes: [cpg]
+fastq_ending: fastq

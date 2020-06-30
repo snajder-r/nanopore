@@ -27,7 +27,7 @@ def fast5_to_fastq_input(wildcards):
 
 rule fast5_to_fastq:
     input: fast5_to_fastq_input
-    output: os.path.join(basedir, 'fastq', '{sample}', 'batched', '{batch}.fastq')
+    output: os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending)
     params:
         jobname='fq_{sample}{batch}',
         runtime='10:00',

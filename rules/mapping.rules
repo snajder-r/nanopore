@@ -16,21 +16,20 @@ The following steps are performed:
 '''
 rule alignment:
     input: rules.fast5_to_fastq.output
-    output: os.path.join(basedir,'mapping/{sample}_{batch}.sorted.filtered.bam')
+    output: os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam')
     params:
         jobname='align_{sample}_{batch}',
-        runtime='09:00',
-        memusage='2000',
-        slots='1',
+        runtime='02:00',
+        memusage='32000',
+        slots='8',
         misc=''
     shell: '''
-           module load samtools
-           {minimap2} -a -x map-ont {reference} {input} | samtools view -q 1 -b | samtools sort -T {output}.tmp -o {output}
-           samtools index {output}
+           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view -q 1 -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output}
+           {samtools} index {output}
            '''
 
 rule all_alignment:
-    input: expand(rules.alignment.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 '''
 ##############################################################################
@@ -68,8 +67,7 @@ rule mergebams:
         slots='1',
         misc=''
     shell: '''
-           module load samtools
-           samtools merge -b {input} - | samtools calmd -b - {reference} | samtools sort -T {output}.tmp -o {output}
+           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} | {samtools} sort -T {output}.tmp -o {output}
            '''
 
 rule all_mergebams:
