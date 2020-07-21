@@ -34,7 +34,7 @@ rule nanopolish_index_from_multiplex:
     params:
         jobname='npidx_{sample}_{batch}',
         runtime='24:00',
-        memusage='8000',
+        memusage='16000',
         slots='1',
         misc=''
     shell: '{nanopolish} index -d {input.f5} -f {input.summary} {input.fq}'

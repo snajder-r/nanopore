@@ -48,9 +48,9 @@ The following steps are performed:
  - Re-sort using samtools sort  (not sure if this is necessary after merge)
 '''
 def prepare_mergebams_input(wildcards):
-    return expand((os.path.join(basedir, 'mapping/%s' % wildcards.sample) + 
-        '_{batch}.sorted.filtered.bam'), 
-        batch=samplebatches[wildcards.sample])
+    return expand((os.path.join(basedir, 'mapping', '{sample}', 
+        '{batch}.sorted.filtered.bam')), 
+        batch=samplebatches[wildcards.sample], sample=wildcards.sample)
 
 rule prepare_mergebams:
     input: prepare_mergebams_input
@@ -62,7 +62,7 @@ rule mergebams:
     output: os.path.join(basedir, 'mapping/{sample}.sorted.bam')
     params:
         jobname='mergebam_{sample}',
-        runtime='09:59',
+        runtime='24:00',
         memusage='64000',
         slots='1',
         misc=''
