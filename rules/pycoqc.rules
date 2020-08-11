@@ -21,7 +21,7 @@ rule all_fast5_to_seq_summary:
 rule pycoqc_report:
     input: 
         summary = rules.fast5_to_seq_summary.output,
-        bams = lambda wildcards: expand(rules.alignment.output, batch=samplebatches[wildcards.sample], sample=wildcards.sample)
+        bams = lambda wildcards: expand(rules.alignment.output, batch=samplebatches(wildcards.sample), sample=wildcards.sample)
     output:
         os.path.join(basedir, 'report', '{sample}_pycoqc.html')
     params:

@@ -40,8 +40,5 @@ rule medaka_metcall:
         misc=''
     shell: '{medaka} methylation call --meth all {input} {reference} {wildcards.chrom}:0-10000000 {output}' 
 
-rule testmedaka:
-    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=['all'], batch=['0'], chrom=[chroms[0]])
-
 rule all_medaka_metcall:
     input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=sbf.sample, batch=sbf.batch, chrom=chroms)
