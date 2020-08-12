@@ -93,10 +93,9 @@ rule guppy_basecall:
         runtime='48:00',
         memusage='32000',
         slots='1',
-        #misc = '-gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G'
-        misc=''
-    run: 
-        gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
+        misc = '-gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G' if guppy_use_gpu else ''
+    run:
+        gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=guppy_use_gpu, cpu_threads=int(params.slots))
         gw.run_guppy_batchwise(input[0], params.outputdir)
 
 rule all_guppy_basecall:

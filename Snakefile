@@ -1,12 +1,15 @@
 import os
-import sys
-
-import h5py
-import numpy as np
-import pandas as pd
 
 for k in config.keys():
     globals()[k] = config[k]
+
+# Mandatory globals
+basecall_id = config['basecall_id']
+basedir = config['basedir']
+mettypes = config['mettypes']
+per_batch = config['per_batch']
+
+
 
 basecall_group = 'Basecall_1D_%s' % basecall_id
 if 'unique_samples' not in config.keys():
@@ -15,6 +18,8 @@ if 'fastq_ending' not in config.keys():
     fastq_ending = 'fq'
 if 'chroms' not in config.keys():
     chroms = []
+if 'is_transcriptome' not in config.keys():
+    is_transcriptome = False
 
 '''
 Detect batches for each sample. Fills the global variables:
@@ -26,9 +31,8 @@ samples and batches are filled such that zip(samples,batches) would result
 in the full list of sample and batch tuples.
 '''
 
-sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
+sb = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', '{batch}.%s'%fastq_ending))
 sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5'))
-
 
 def samplebatches(sample):
     if len(sb.sample) == 0:
@@ -100,6 +104,19 @@ not computationally expensive.
 '''
 
 
+include: 'rules/fastq.rules'
+include: 'rules/guppy.rules'
+include: 'rules/mapping.rules'
+include: 'rules/medaka.rules'
+include: 'rules/megalodon.rules'
+include: 'rules/nanopolish.rules'
+include: 'rules/pycoqc.rules'
+include: 'rules/sniffles.rules'
+include: 'rules/tombo.rules'
+include: 'rules/edgecase.rules'
+
+include: 'rules.d/custom.rules'
+
 def split_batches_from_file_list(all_files, outdir):
     # Create "batched" directory if it doesn't exist
     if not os.path.exists(outdir):
@@ -155,18 +172,7 @@ checkpoint all_split_batches:
 checkpoint all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
-include: 'rules/fastq.rules'
-include: 'rules/guppy.rules'
-include: 'rules/mapping.rules'
-include: 'rules/medaka.rules'
-include: 'rules/megalodon.rules'
-include: 'rules/nanopolish.rules'
-include: 'rules/pycoqc.rules'
-include: 'rules/sniffles.rules'
-include: 'rules/tombo.rules'
-include: 'rules/edgecase.rules'
 
-include: 'rules.d/custom.rules'
 
 '''
 ##############################################################################
@@ -200,6 +206,6 @@ rule all_report_methylation:
 rule test:
     #    input: '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/fastq/Germline/0.fastq.index.readdb'
     input:
-         '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/mapping_chr11_chr17/Germline/124.sorted.filtered.bam'
+         '/homes/snajder/data/rnamod/eventalign/BC02/3.eventalign.summary.txt'
 
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq

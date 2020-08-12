@@ -14,6 +14,8 @@ The following steps are performed:
   - Sort bam file
   - Create bam index
 '''
+
+
 rule alignment:
     input: rules.fast5_to_fastq.output
     output: os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam')
@@ -22,14 +24,17 @@ rule alignment:
         runtime='02:00',
         memusage='32000',
         slots='8',
-        misc=''
+        misc='',
+        mapping_params='-ax map-ont -N 100 -p 0.99' if is_transcriptome else '-x map-ont',
+        filter_params='-F 2324 -q 10' if is_transcriptome else '-q 1'
     shell: '''
-           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view -q 1 -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output}
+           {minimap2} -t {params.slots} -a {params.mapping_params} {reference} {input} | {samtools} view {params.filter_params} -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
            {samtools} index {output}
            '''
 
+
 rule all_alignment:
-    input: expand(rules.alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.alignment.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
 
 '''
 ##############################################################################
@@ -48,8 +53,8 @@ The following steps are performed:
  - Re-sort using samtools sort  (not sure if this is necessary after merge)
 '''
 def prepare_mergebams_input(wildcards):
-    return expand((os.path.join(basedir, 'mapping', '{sample}', 
-        '{batch}.sorted.filtered.bam')), 
+    return expand((os.path.join(basedir, 'mapping', '{sample}',
+        '{batch}.sorted.filtered.bam')),
         batch=samplebatches[wildcards.sample], sample=wildcards.sample)
 
 rule prepare_mergebams:

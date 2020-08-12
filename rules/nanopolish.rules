@@ -1,3 +1,5 @@
+import os
+
 '''
 ##############################################################################
 # Methylation calling using nanopolish
@@ -12,18 +14,24 @@ efficiently by nanopolish.
 The output files will be created within the fastq directory 
 (with .index.readdb suffix for each fq file) 
 '''
+
+def summary_file_if_exists(wildcards):
+    summary_file = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy_summary.txt')
+    return ('-s %s' % summary_file) if os.path.exists(summary_file) else ''
+
 rule nanopolish_index:
     input:
         f5=os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}'),
         fq=rules.fast5_to_fastq.output
-    output: os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending)
+    output: os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s.index.readdb' % fastq_ending)
     params:
         jobname='npidx_{sample}_{batch}',
         runtime='08:00',
         memusage='2000',
         slots='1',
-        misc=''
-    shell: '{nanopolish} index -d {input.f5} {input.fq}'
+        misc='',
+        summary_file=summary_file_if_exists
+    shell: '{f5c} index {params.summary_file} -d {input.f5} {input.fq}'
 
 rule nanopolish_index_from_multiplex:
     input:
@@ -127,3 +135,21 @@ rule all_merge_met_perchrom:
     input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
 
 
+rule f5c_eventalign:
+    input: fastq=rules.fast5_to_fastq.output,
+           index=rules.nanopolish_index.output,
+           bam=rules.alignment.output
+    output: #tsv=os.path.join(basedir, 'eventalign', '{sample}', '{batch}.tsv'),
+            summary=os.path.join(basedir, 'eventalign', '{sample}', '{batch}.eventalign.summary.txt')
+    params:
+        jobname='f5c_eventalign_{sample}_{batch}',
+        runtime='8:00',
+        memusage='16000',
+        slots='12',
+        misc=''
+    shell: '''
+           {nanopolish} eventalign -r {input.fastq} -b {input.bam} -g {reference} -t 12 --summary {output.summary}
+           '''
+
+rule all_f5c_eventalign:
+    input: expand(rules.f5c_eventalign.output.summary, zip_combinator, sample=sbf.sample, batch=sbf.batch)

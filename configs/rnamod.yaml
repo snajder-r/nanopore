@@ -5,8 +5,14 @@ reference: /homes/snajder/data/rnamod/reference/gencode.vM25.transcripts.fa.gz
 
 pycoQC: /homes/snajder/miniconda3/envs/py37/bin/pycoQC
 Fast5_to_seq_summary: /homes/snajder/miniconda3/envs/py37/bin/Fast5_to_seq_summary
+minimap2: /hps/nobackup/research/stegle/users/snajder/software/minimap2/minimap2
+samtools: /hps/nobackup/research/stegle/users/snajder/software/samtools/bin/samtools
+nanopolish: /homes/snajder/data/software/nanopolish/nanopolish
+f5c: /homes/snajder/data/software/f5c/f5c
 
 per_batch: 5
 unique_samples: [BC01, BC02]
 mettypes: [dam]
 basecall_id: '000'
+guppy_use_gpu: True
+is_transcriptome: True
