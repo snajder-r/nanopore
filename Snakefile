@@ -1,4 +1,5 @@
 import os
+from string import Formatter
 
 for k in config.keys():
     globals()[k] = config[k]
@@ -36,9 +37,9 @@ sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch
 
 def samplebatches(sample):
     if len(sb.sample) == 0:
-        return [sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]
+        return list(set([sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]))
     else:
-        return [sb.batch[i] for i in range(len(sb.batch)) if sb.sample[i] == sample]
+        return list(set([sb.batch[i] for i in range(len(sb.batch)) if sb.sample[i] == sample]))
 
 
 '''
@@ -81,6 +82,138 @@ def zip2_comb3_combinator(*args, **kwargs):
             yield args[0][i], args[1][i], args[2][j]
 
 
+def globspand(path, **kwargs):
+    """
+    This is a handy utility function that combines the functionality of expand
+    and glob_wildcards. As an input, it takes a path containing wildcards.
+    It returns a curried function that takes a wildcards object as an input.
+    Unlike expand, however, it can deal with incomplete wildcards. It will then
+    complete all missing wildcards using the glob_wildcards function.
+
+    Example: a rule might be defined as:
+
+    rule test:
+        input: globspand('/my/path/in/{sample}/{batch}/{filename}.bam')
+        output: '/my/path/out/{sample}/{batch}/result.tsv'
+
+    In this case, the rule will run for exactly one sample and batch (the ones
+    defined in the output) but will use all the bam files that complete the
+    pattern in the input for that sample and batch.
+
+    Alternatively, one can also apply static wildcards for expansion. For example:
+
+    rule test_all:
+        input: globspand('/my/path/in/{sample}/{batch}/{filename}.bam', sample=all_samples, batch=all_batches)
+        output: '/my/path/out/all.tsv'
+
+    Or they can even be used in combination (but must not define the same wildcards).
+    This might be useful if you want to filter input files, like in this example:
+
+    rule test_all:
+        input: globspand('/my/path/in/{qc_type}/{sample}/{batch}/{filename}.bam', qc_types=['pass','fail'])
+        output: '/my/path/out/{sample}/{batch}/result.tsv'
+    """
+
+    # All keys in the original path
+    all_keys = [i[1] for i in Formatter().parse(path)  if i[1] is not None]
+    # Keys provided statically during the invocation of globspand
+    keys_in_globspand = kwargs.keys()
+    def globspand_inner(wildcards):
+        # Keys inferred from the output
+        keys_in_wildcards = wildcards.keys()
+        # Sanity check that there isn't an overlap:
+        assert(len(set(keys_in_globspand).intersection(keys_in_wildcards))==0)
+        # Keys that need to be found using glob_wildcard
+        keys_glob = {k for k in all_keys if k not in keys_in_wildcards and k not in keys_in_globspand}
+        # Expand the path using the wildcards from the output and the static wildcards
+        # in globspand, while keeping a wildcard notation for those that aren't given
+        # (that's wha the {{{k}}} does)
+        wildcard_expand_dict = {k:(wildcards[k] if k in keys_in_wildcards
+                                   else kwargs[k] if k in keys_in_globspand
+                                   else '{{{k}}}'.format(k=k)) for k in all_keys}
+        wildcard_expanded = expand(path, **wildcard_expand_dict)
+        # Since we also allow lists in the static wildcards, this
+        # might lead to multiple paths over which we iterate here
+        for expanded_path in wildcard_expanded:
+            # Find glob_wildcards for the expanded path and further expand it
+            glob = glob_wildcards(expanded_path)
+            glob_expand_dict = {k:getattr(glob,k) for k in keys_glob}
+            globspanded_paths = expand(expanded_path, **glob_expand_dict)
+            for globspanded_path in globspanded_paths:
+                yield globspanded_path
+    return globspand_inner
+
+
+def makelist(x):
+    """
+    Utility function that returns a list [x] if x is a scalar and list(x)
+    if x is iterable.
+    """
+    if isinstance(x, str):
+        # If it's a string, make it a list
+        return [x]
+    try:
+        iter(x)
+    except TypeError:
+        # If it's not iterable make it a list
+        return [x]
+    # Make sure iterable is a list
+    return list(x)
+
+
+def glob_output_from_input(in_pattern, out_pattern, combiner=zip, **wildcards_dict):
+    """
+    Another untility function that creates a list of input files based
+    on the wildcards in an input file pattern and an output file pattern.
+    The wildcards given in the wildcards_dict will be used to expand the patterns
+    and all remaining wildcards in the output pattern will be used to glob_wildcard
+    the input pattern to then further expand the output pattern.
+
+    For example, if you had files
+
+    /my/path/in/sample<n>/batch<m>/<l>.fq
+
+    And a rule like
+
+    rule test:
+        input: globspand('/my/path/in/sample{n}/batch{m}/{l}.fq')
+        output: '/my/path/out/sample{n}/{m}.bam'
+
+    You could then run this rule for all test:
+
+    rule all_test:
+        input: glob_output_from_input('/my/path/in/sample{n}/batch{m}/{l}.fq', '/my/path/out/sample{n}/{m}.bam', n=[1,2])
+
+    It would run all_test for samples 1 and 2, and find all the applicable batches n
+    for which it can run test, and run all of those.
+    """
+    def glob_output_from_input_inner(_):
+        in_keys = [i[1] for i in Formatter().parse(in_pattern)  if i[1] is not None]
+        out_keys = [i[1] for i in Formatter().parse(out_pattern)  if i[1] is not None]
+
+        unresolved_wildcards_output = [k for k in out_keys if k not in wildcards_dict.keys()]
+        unresolved_wildcards_input = [k for k in in_keys if k not in wildcards_dict.keys()]
+        assert(len(unresolved_wildcards_output)>0)
+        wildcards_keys = [k for k in wildcards_dict.keys()]
+        wildcards_values = [makelist(wildcards_dict[k]) for k in wildcards_keys]
+        wildcards_values = combiner(*wildcards_values)
+        for combination in wildcards_values:
+            combination_dict = {wildcards_keys[i]:combination[i] for i in range(len(combination))}
+            dummy_dict_in = {k:'{{{k}}}'.format(k=k) for k in unresolved_wildcards_input}
+            dummy_dict_out = {k:'{{{k}}}'.format(k=k) for k in unresolved_wildcards_output}
+            in_expanded = in_pattern.format(**combination_dict, **dummy_dict_in)
+            out_expanded = out_pattern.format(**combination_dict, **dummy_dict_out)
+            glob = glob_wildcards(in_expanded)
+            glob_out_vals = []
+            for key in unresolved_wildcards_output:
+                glob_out_vals.append(getattr(glob, key))
+            out_combinations_from_glob = list(set(zip(*glob_out_vals)))
+            for out_combination in out_combinations_from_glob:
+                out_combination_dict = {unresolved_wildcards_output[i]:out_combination[i] for i in range(len(out_combination))}
+                out_formatted = out_expanded.format(**out_combination_dict)
+                yield out_formatted
+    return glob_output_from_input_inner
+
 '''
 ##############################################################################
 # Splitting fast5 files into batches for parallel processing computation
@@ -114,8 +247,10 @@ include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
 include: 'rules/tombo.rules'
 include: 'rules/edgecase.rules'
+include: 'rules/nanocompore.rules'
+include: 'rules/albacore.rules'
 
-include: 'rules.d/custom.rules'
+# include: 'rules.d/custom.rules'
 
 def split_batches_from_file_list(all_files, outdir):
     # Create "batched" directory if it doesn't exist
@@ -203,9 +338,5 @@ rule report_methylation:
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
 
-rule test:
-    #    input: '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/fastq/Germline/0.fastq.index.readdb'
-    input:
-         '/homes/snajder/data/rnamod/eventalign/BC02/3.eventalign.summary.txt'
 
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq

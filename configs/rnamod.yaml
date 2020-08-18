@@ -1,18 +1,24 @@
-basedir: /homes/snajder/data/rnamod/
+basedir: /homes/snajder/data/rnamod/analysis3/
 
 python: /homes/snajder/miniconda3/envs/py37/bin/python
 reference: /homes/snajder/data/rnamod/reference/gencode.vM25.transcripts.fa.gz
 
+guppy_dir: /homes/snajder/data/software/guppy/ont-guppy-cpu-3.1.5/
 pycoQC: /homes/snajder/miniconda3/envs/py37/bin/pycoQC
 Fast5_to_seq_summary: /homes/snajder/miniconda3/envs/py37/bin/Fast5_to_seq_summary
 minimap2: /hps/nobackup/research/stegle/users/snajder/software/minimap2/minimap2
 samtools: /hps/nobackup/research/stegle/users/snajder/software/samtools/bin/samtools
 nanopolish: /homes/snajder/data/software/nanopolish/nanopolish
+NanopolishComp: /homes/snajder/miniconda3/envs/nanocompore/bin/NanopolishComp
 f5c: /homes/snajder/data/software/f5c/f5c
+nanocompore: /homes/snajder/miniconda3/envs/nanocompore/bin/nanocompore
+albacore_dir: /homes/snajder/miniconda3/envs/albacore2.1.7/bin/
+albacore_conf: r94_70bps_rna_linear.cfg
 
 per_batch: 5
 unique_samples: [BC01, BC02]
 mettypes: [dam]
 basecall_id: '000'
-guppy_use_gpu: True
+guppy_use_gpu: False
+guppy_conf: rna_r9.4.1_70bps_hac.cfg
 is_transcriptome: True

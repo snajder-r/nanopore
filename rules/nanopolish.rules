@@ -139,7 +139,7 @@ rule f5c_eventalign:
     input: fastq=rules.fast5_to_fastq.output,
            index=rules.nanopolish_index.output,
            bam=rules.alignment.output
-    output: #tsv=os.path.join(basedir, 'eventalign', '{sample}', '{batch}.tsv'),
+    output: tsv=os.path.join(basedir, 'eventalign', '{sample}', '{batch}.tsv'),
             summary=os.path.join(basedir, 'eventalign', '{sample}', '{batch}.eventalign.summary.txt')
     params:
         jobname='f5c_eventalign_{sample}_{batch}',
@@ -148,8 +148,9 @@ rule f5c_eventalign:
         slots='12',
         misc=''
     shell: '''
-           {nanopolish} eventalign -r {input.fastq} -b {input.bam} -g {reference} -t 12 --summary {output.summary}
+           {nanopolish} eventalign --samples -r {input.fastq} -b {input.bam} -g {reference} -t 12 --summary {output.summary} > {output.tsv}
            '''
 
 rule all_f5c_eventalign:
-    input: expand(rules.f5c_eventalign.output.summary, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.f5c_eventalign.output.tsv, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+

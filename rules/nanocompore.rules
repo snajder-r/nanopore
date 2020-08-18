@@ -1,0 +1,36 @@
+rule nanopolish_comp_sample:
+    input: lambda wildcards: expand(rules.f5c_eventalign.output.tsv, sample=wildcards['sample'], batch=set(samplebatches(wildcards.sample)))
+    output: os.path.join(basedir, 'eventalign', '{sample}_combined_eventalign_collapse.tsv'),
+    params:
+        jobname='nanopolish_comp_{sample}',
+        runtime='24:00',
+        memusage='32000',
+        slots='32',
+        misc='',
+        outprefix='{sample}_combined',
+        outdir=os.path.join(basedir, 'eventalign')
+    shell: '''
+           {NanopolishComp} Eventalign_collapse -i {input} -o {params.outdir} -p {params.outprefix} -t {params.slots}
+           '''
+
+rule all_nanopolish_comp_sample:
+    input: expand(rules.nanopolish_comp_sample.output, sample=unique_samples)
+
+
+rule nanocompore:
+    input: sample1 = lambda wildcards: expand(rules.nanopolish_comp_sample.output, sample=wildcards.sample1),
+           sample2 = lambda wildcards: expand(rules.nanopolish_comp_sample.output, sample=wildcards.sample2)
+    output: os.path.join(basedir, 'nanocompore', '{sample1}_vs_{sample2}', 'out_SampComp.db.dat')
+    params:
+        jobname='nanocompore_{sample1}_{sample2}',
+        runtime='24:00',
+        memusage='16000',
+        slots='4',
+        misc='',
+        outdir=os.path.join(basedir, 'nanocompore', '{sample1}_vs_{sample2}')
+    shell: '''
+           {nanocompore} sampcomp -1 {input.sample1} -2 {input.sample2} -f /homes/snajder/data/rnamod/reference/gencode.vM25.transcripts.fa -o {params.outdir} --overwrite
+           '''
+
+rule all_nanocompore:
+    input: [expand(rules.nanocompore.output, sample1 = unique_samples[i], sample2 = unique_samples[j]) for i in range(len(unique_samples)) for j in range(i+1, len(unique_samples))]

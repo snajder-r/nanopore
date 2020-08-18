@@ -1,0 +1,91 @@
+import os
+import sys
+import shutil
+import subprocess
+
+class AlbacoreWrapper:
+    def __init__(self, albacore_dir, albacore_conf, scratch_dir=None, batch_size=15, threads=1):
+        self.albacore = os.path.join(albacore_dir, 'read_fast5_basecaller.py')
+        self.albacore_conf = albacore_conf
+        self.scratch_dir = scratch_dir
+        self.batch_size=batch_size
+        self.threads = threads
+
+    def run_albacore(self, indir, outdir):
+        albacore_command = '{albacore} --input {indir} --save_path {outdir} ' \
+                '--worker_threads {threads} -c {conf}'.format(albacore=self.albacore, indir=indir, outdir=outdir,
+                                                     threads=self.threads, conf=self.albacore_conf).split(' ')
+        print(albacore_command)
+
+
+        p = subprocess.Popen(albacore_command, stdout=subprocess.PIPE)
+
+        for line in p.stdout:
+            print('Albacore: ' + line.decode('UTF-8'))
+
+        return p.wait()
+
+
+    def run_albacore_in_temp_dir(self, inputdir, outputfile):
+        LSB_JOBID=os.getenv('LSB_JOBID')
+
+        ssd_out=os.path.join(self.scratch_dir, LSB_JOBID,'output')
+
+        os.makedirs(ssd_out, exist_ok=True)
+
+        albacore_exitcode = self.run_albacore(inputdir, ssd_out)
+
+        if albacore_exitcode == 0:
+            basecalled_fq_dir_pass = os.path.join(ssd_out, 'workspace', 'pass')
+            basecalled_fq_dir_fail = os.path.join(ssd_out, 'workspace', 'fail')
+
+            try:
+                print('Merging:')
+                os.makedirs(os.path.dirname(outputfile), exist_ok=True)
+                with open(outputfile, 'w') as f_out:
+                    for outdir in basecalled_fq_dir_pass, basecalled_fq_dir_fail:
+                        for resfn in [fn for fn in os.listdir(outdir) if fn.endswith('.fastq')]:
+                            print(resfn)
+                            with open(os.path.join(outdir,resfn), 'r') as f_in:
+                                for line in f_in:
+                                    f_out.write(line)
+
+                    #p = subprocess.Popen(['cat', basecalled_fq_dir_pass+'/*.fastq', basecalled_fq_dir_fail+'/*.fastq'], stdout=f)
+                    #p.wait()
+            finally:
+                print("Cleaning up %s" % ssd_out)
+                #shutil.rmtree(ssd_out)
+
+'''
+##############################################################################
+# GUPPY basecalling
+##############################################################################
+'''
+
+albacore_in_pattern = os.path.join(basedir, 'raw', '{sample}', 'single', '{singlefast5batch}', '{uuid}.fast5')
+albacore_out_pattern = os.path.join(basedir, 'raw', '{sample}', 'albacore', '{singlefast5batch}.fq')
+rule albacore_basecall:
+    #input: globspand(albacore_in_pattern)
+    output: albacore_out_pattern
+    params:
+        inputdir= os.path.join(basedir, 'raw', '{sample}', 'single', '{singlefast5batch}'),
+        outputdir= os.path.join(basedir, 'raw', '{sample}', 'albacore'),
+        jobname='albacore_{sample}',
+        runtime='48:00',
+        memusage='32000',
+        slots=16,
+        scratchdir=temp(os.path.join(basedir, 'tmp')),
+        misc = ''
+    run:
+        gw = AlbacoreWrapper(albacore_dir, albacore_conf=albacore_conf, scratch_dir=params.scratchdir, threads=params.slots)
+        gw.run_albacore_in_temp_dir(params.inputdir, output[0])
+
+
+
+
+
+rule all_albacore_basecall:
+    input: glob_output_from_input(albacore_in_pattern, albacore_out_pattern, sample=unique_samples)
+
+rule test:
+    input: expand(albacore_out_pattern, sample='BC01', singlefast5batch='0')
