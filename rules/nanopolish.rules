@@ -1,3 +1,5 @@
+from nanoepitools.nanopolish_container import MetcallH5Container
+
 '''
 ##############################################################################
 # Methylation calling using nanopolish
@@ -80,12 +82,12 @@ So while it merges batches, it also splits up chromosomes.
 '''
 def merge_met_perchrom_input(wildcards):
     return expand(os.path.join(basedir, 
-        'met/%s_{batch}_met_%s.tsv' % (wildcards.sample, wildcards.mettype)),
-        batch=samplebatches[wildcards.sample])
+        'met', wildcards.sample, '{batch}_met_%s.tsv' % wildcards.mettype),
+        batch=samplebatches(wildcards.sample))
 
 rule merge_met_perchrom:
     input: merge_met_perchrom_input
-    output: os.path.join(basedir, 'met_merged/{sample}_chr{chrom}_met_{mettype}.pkl')
+    output: os.path.join(basedir, 'met_merged', '{sample}', 'chr{chrom}_met_{mettype}.pkl')
     params:
         jobname='mergemet_{sample}_{chrom}',
         runtime='12:00',
@@ -93,23 +95,11 @@ rule merge_met_perchrom:
         slots='1',
         misc=''
     run:
-        metcall_dir = os.path.join(basedir, 'met') 
-        sample = wildcards['sample']
-        chrom = wildcards['chrom']
-        mettype = wildcards['mettype']
         pickle_file = output[0]
-
+        chrom = wildcards['chrom']
         sample_met = None
-        sample_batch_re = re.compile('%s_(.*)_met_%s\.tsv' % (sample, mettype))
-        for f in os.listdir(metcall_dir):
-            mitch = sample_batch_re.match(f)
-
-            if mitch is None:
-                continue
-
-            batch = mitch.group(1)
-            
-            for lmet in pd.read_csv(os.path.join(metcall_dir,f), sep='\t', header=0, chunksize=1000000,
+        for f in input:
+            for lmet in pd.read_csv(f, sep='\t', header=0, chunksize=1000000,
                                dtype={'chromosome':'category', 
                                       'strand':'category', 
                                       'num_calling_strands':np.uint8, 
@@ -127,3 +117,30 @@ rule all_merge_met_perchrom:
     input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
 
 
+def merge_met_hdf5_input(wildcards):
+    return expand(os.path.join(basedir,
+        'met', wildcards.sample, '{batch}_met_%s.tsv' % wildcards.mettype),
+        batch=samplebatches(wildcards.sample))
+
+rule merge_met_hdf5:
+    input: merge_met_hdf5_input
+    output: os.path.join(basedir, 'met_merged', '{sample}_{mettype}.h5')
+    params:
+        jobname='mergemet_{sample}_{mettype}',
+        runtime='12:00',
+        memusage='8000',
+        slots='1',
+        misc=''
+    run:
+        with MetcallH5Container(output[0], 'w') as out_container:
+            for tsv_file in input:
+                out_container.parse_and_add_nanopolish_file(tsv_file)
+        
+rule all_merge_met_hdf5:
+    input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)
+
+    
+    
+
+    
+    
