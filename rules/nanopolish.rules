@@ -87,7 +87,7 @@ def merge_met_perchrom_input(wildcards):
 
 rule merge_met_perchrom:
     input: merge_met_perchrom_input
-    output: os.path.join(basedir, 'met_merged', '{sample}', 'chr{chrom}_met_{mettype}.pkl')
+    output: os.path.join(basedir, 'met_merged', '{sample}', '{chrom}_met_{mettype}.pkl')
     params:
         jobname='mergemet_{sample}_{chrom}',
         runtime='12:00',
