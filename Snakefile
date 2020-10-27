@@ -28,7 +28,7 @@ in the full list of sample and batch tuples.
 
 sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
 sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5'))
-
+print(sb)
 
 def samplebatches(sample):
     if len(sb.sample) == 0:

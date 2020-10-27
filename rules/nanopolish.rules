@@ -1,4 +1,4 @@
-from nanoepitools.nanopolish_container import MetcallH5Container
+from meth5.meth5_wrapper import MetH5File
 
 '''
 ##############################################################################
@@ -132,7 +132,7 @@ rule merge_met_hdf5:
         slots='1',
         misc=''
     run:
-        with MetcallH5Container(output[0], 'w') as out_container:
+        with MetH5File(output[0], 'w') as out_container:
             for tsv_file in input:
                 out_container.parse_and_add_nanopolish_file(tsv_file)
         
