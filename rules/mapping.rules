@@ -28,7 +28,7 @@ rule alignment:
            {samtools} index {output}
            '''
 
-rule all_alignment:
+checkpoint all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 '''

@@ -28,7 +28,7 @@ rule telomere_extended_alignment:
            '''
 
 checkpoint all_telomere_extended_alignment:
-    input: expand(rules.telomere_extended_alignment.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.telomere_extended_alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 rule edgecase_tailpuller:
     input: rules.telomere_extended_alignment.output
@@ -44,13 +44,13 @@ rule edgecase_tailpuller:
            '''
 
 checkpoint all_edgecase_tailpuller:
-    input: expand(rules.edgecase_tailpuller.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.edgecase_tailpuller.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 
 def prepare_merge_edgecase_tailpuller_input(wildcards):
-    for i in range(len(sbf.batch)): 
-        if sbf.sample[i]==wildcards.sample:
-             yield os.path.join(basedir, 'telomeres', 'edgecase', wildcards.sample, '%s.tails.bam' % sbf.batch[i])
+    for i in range(len(sb.batch)):
+        if sb.sample[i]==wildcards.sample:
+             yield os.path.join(basedir, 'telomeres', 'edgecase', wildcards.sample, '%s.tails.bam' % sb.batch[i])
 
 checkpoint prepare_merge_edgecase_tailpuller:
     input: prepare_merge_edgecase_tailpuller_input
@@ -77,7 +77,7 @@ checkpoint merge_edgecase_tailpuller:
            '''
 
 checkpoint all_merge_edgecase_tailpuller:
-    input: expand(rules.merge_edgecase_tailpuller.output, sample=sbf.sample)
+    input: expand(rules.merge_edgecase_tailpuller.output, sample=sb.sample)
 
 rule edgecase_tailchopper:
     input: rules.merge_edgecase_tailpuller.output
@@ -93,7 +93,7 @@ rule edgecase_tailchopper:
            '''
 
 checkpoint all_edgecase_tailchopper:
-    input: expand(rules.edgecase_tailchopper.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.edgecase_tailchopper.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 
 rule edgecase_repeatfinder:
@@ -112,7 +112,7 @@ rule edgecase_repeatfinder:
            '''
 
 checkpoint all_edgecase_repeatfinder:
-    input: expand(rules.edgecase_repeatfinder.output, sample=sbf.sample)
+    input: expand(rules.edgecase_repeatfinder.output, sample=sb.sample)
 
 
 rule edgecase_kmerscanner:
