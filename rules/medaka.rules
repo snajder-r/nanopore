@@ -27,7 +27,7 @@ rule medaka_align:
            '''
 
 rule all_medaka_align:
-    input: expand(rules.medaka_align.output, zip_combinator, sample=sbf.sample, batch=sbf.batch)
+    input: expand(rules.medaka_align.output, zip_combinator, sample=sb.sample, batch=sb.batch)
 
 rule medaka_metcall:
     input: rules.medaka_align.output.bam
@@ -41,4 +41,4 @@ rule medaka_metcall:
     shell: '{medaka} methylation call --meth all {input} {reference} {wildcards.chrom}:0-10000000 {output}' 
 
 rule all_medaka_metcall:
-    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=sbf.sample, batch=sbf.batch, chrom=chroms)
+    input: expand(rules.medaka_metcall.output, zip2_comb3_combinator, sample=sb.sample, batch=sb.batch, chrom=chroms)

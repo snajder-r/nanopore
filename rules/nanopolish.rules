@@ -67,7 +67,7 @@ rule metcall:
         misc=''
     shell: '{nanopolish} call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
-rule all_metcall:
+checkpoint all_metcall:
     input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sb.sample, batch=sb.batch, mtype=mettypes)
 
 '''
@@ -113,7 +113,7 @@ rule merge_met_perchrom:
 
         sample_met.to_pickle(pickle_file, compression='gzip')
 
-rule all_merge_met_perchrom:
+checkpoint all_merge_met_perchrom:
     input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
 
 
@@ -136,7 +136,7 @@ rule merge_met_hdf5:
             for tsv_file in input:
                 out_container.parse_and_add_nanopolish_file(tsv_file)
         
-rule all_merge_met_hdf5:
+checkpoint all_merge_met_hdf5:
     input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)
 
     
