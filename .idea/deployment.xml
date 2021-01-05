@@ -12,6 +12,13 @@
       <paths name="r933r@odcf-worker01:22">
         <serverdata>
           <mappings>
+            <mapping deploy="/code/nanopore" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="r933r@odcf-worker01:22 agent">
+        <serverdata>
+          <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>

@@ -28,6 +28,6 @@ rule megalodon:
     shell: '{megalodon} --guppy-params "--cpu_threads_per_caller 16" --guppy-server-path {guppy} --overwrite --output-directory %s --mod-calibration-filename {megalodon_calibration} --outputs=mod_basecalls {input}' % os.path.join(basedir, 'megalodon/{wildcards.sample}/{wildcards.batch}/')
 
 rule all_megalodon:
-    input: expand(rules.megalodon.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.megalodon.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
 
 

@@ -29,5 +29,5 @@ rule alignment_chr11_chr17:
            '''
 
 rule all_alignment_chr11_chr17:
-    input: expand(rules.alignment_chr11_chr17.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.alignment_chr11_chr17.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
 

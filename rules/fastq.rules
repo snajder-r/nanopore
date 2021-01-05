@@ -19,8 +19,14 @@ done because guppy will sometimes file to produce basecalls, and is such a
 case we just skip that file and move on.
 '''
 
+def fast5_to_fastq_input(wildcards):
+    indir = os.path.join(basedir,'raw',wildcards['sample'],'batched', wildcards['batch'])
+    for i in range(len(sbf.sbf_filenames)):
+        if sbf.sbf_samples[i] == wildcards['sample'] and sbf.sbf_batches[i] == wildcards['batch']:
+            yield os.path.join(indir, '%s.fast5'%sbf.sbf_filenames[i])
+
 rule fast5_to_fastq:
-    input: os.path.join(basedir,'raw','{sample}','batched', '{batch}')
+    input: fast5_to_fastq_input
     output: os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending)
     params:
         jobname='fq_{sample}{batch}',
@@ -32,7 +38,6 @@ rule fast5_to_fastq:
         fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
                         basecall_group=basecall_group)
         with open(output[0],'w') as of:
-            input = [f for f in os.listdir(input) if f.endswith(".fast5")]
             for i in range(len(input)):
                 with h5py.File(input[i],'r') as f:
                     for read in f.keys():
@@ -44,6 +49,6 @@ rule fast5_to_fastq:
                         of.write('\n'.join(fq))
 
 checkpoint all_fast5_to_fastq:
-    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sb.sample,  batch=sb.batch)
+    input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sbf_samples,  batch=sbf.sbf_batches)
 
 

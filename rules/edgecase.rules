@@ -9,9 +9,9 @@ reference that contains *subtelomere* sequences.
 
 
 def telomere_extended_alignment_input(wildcards):
-    for i in range(len(sbf.filename)): 
-        if sbf.sample[i]==wildcards.sample and sbf.batch[i] == wildcards.batch:
-             yield os.path.join(basedir, 'fastq', wildcards.sample, 'batched', wildcards.batch, '%s.fastq'%sbf.filename[i])
+    for i in range(len(sbf.sbf_filenames)): 
+        if sbf.sbf_samples[i]==wildcards.sample and sbf.sbf_batches[i] == wildcards.batch:
+             yield os.path.join(basedir, 'fastq', wildcards.sample, 'batched', wildcards.batch, '%s.fastq'%sbf.sbf_filenames[i])
 
 rule telomere_extended_alignment:
     input: telomere_extended_alignment_input
@@ -28,7 +28,7 @@ rule telomere_extended_alignment:
            '''
 
 checkpoint all_telomere_extended_alignment:
-    input: expand(rules.telomere_extended_alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.telomere_extended_alignment.output, zip_combinator, sample=sbf.sbf_samples, batch=sbf.sbf_batches)
 
 rule edgecase_tailpuller:
     input: rules.telomere_extended_alignment.output
@@ -44,13 +44,13 @@ rule edgecase_tailpuller:
            '''
 
 checkpoint all_edgecase_tailpuller:
-    input: expand(rules.edgecase_tailpuller.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.edgecase_tailpuller.output, zip_combinator, sample=sbf.sbf_samples, batch=sbf.sbf_batches)
 
 
 def prepare_merge_edgecase_tailpuller_input(wildcards):
-    for i in range(len(sb.batch)):
-        if sb.sample[i]==wildcards.sample:
-             yield os.path.join(basedir, 'telomeres', 'edgecase', wildcards.sample, '%s.tails.bam' % sb.batch[i])
+    for i in range(len(sbf.sbf_batches)): 
+        if sbf.sbf_samples[i]==wildcards.sample:
+             yield os.path.join(basedir, 'telomeres', 'edgecase', wildcards.sample, '%s.tails.bam' % sbf.sbf_batches[i])
 
 checkpoint prepare_merge_edgecase_tailpuller:
     input: prepare_merge_edgecase_tailpuller_input
@@ -77,7 +77,7 @@ checkpoint merge_edgecase_tailpuller:
            '''
 
 checkpoint all_merge_edgecase_tailpuller:
-    input: expand(rules.merge_edgecase_tailpuller.output, sample=sb.sample)
+    input: expand(rules.merge_edgecase_tailpuller.output, sample=sbf.sbf_samples)
 
 rule edgecase_tailchopper:
     input: rules.merge_edgecase_tailpuller.output
@@ -93,7 +93,7 @@ rule edgecase_tailchopper:
            '''
 
 checkpoint all_edgecase_tailchopper:
-    input: expand(rules.edgecase_tailchopper.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(rules.edgecase_tailchopper.output, zip_combinator, sample=sbf.sbf_samples, batch=sbf.sbf_batches)
 
 
 rule edgecase_repeatfinder:
@@ -112,7 +112,7 @@ rule edgecase_repeatfinder:
            '''
 
 checkpoint all_edgecase_repeatfinder:
-    input: expand(rules.edgecase_repeatfinder.output, sample=sb.sample)
+    input: expand(rules.edgecase_repeatfinder.output, sample=sbf.sbf_samples)
 
 
 rule edgecase_kmerscanner:

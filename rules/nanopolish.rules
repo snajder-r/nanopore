@@ -14,18 +14,27 @@ efficiently by nanopolish.
 The output files will be created within the fastq directory 
 (with .index.readdb suffix for each fq file) 
 '''
+
+def nanopore_summary_file(wildcards):
+    filename = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy_summary.txt')
+    if os.path.exists(filename):
+        return f'-s {filename}'
+    else:
+        return ''
+
 rule nanopolish_index:
     input:
         f5=os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}'),
         fq=rules.fast5_to_fastq.output
     output: os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending)
     params:
+        summary_file=nanopore_summary_file,
         jobname='npidx_{sample}_{batch}',
         runtime='08:00',
         memusage='2000',
         slots='1',
         misc=''
-    shell: '{nanopolish} index -d {input.f5} {input.fq}'
+    shell: '{nanopolish} index {params.summary_file} -d {input.f5} {input.fq}'
 
 rule nanopolish_index_from_multiplex:
     input:
@@ -43,7 +52,7 @@ rule nanopolish_index_from_multiplex:
 
 
 rule all_nanopolish_index:
-    input: expand(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s.index.readdb' % fastq_ending), zip_combinator, sample=sb.sample, batch=sb.batch)
+    input: expand(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s.index.readdb' % fastq_ending), zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
 
 
 '''
@@ -67,8 +76,8 @@ rule metcall:
         misc=''
     shell: '{nanopolish} call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
-checkpoint all_metcall:
-    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sb.sample, batch=sb.batch, mtype=mettypes)
+rule all_metcall:
+    input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
 
 '''
 This merges the nanopolish methylation calls, loads it into a pandas dataframe
@@ -113,7 +122,7 @@ rule merge_met_perchrom:
 
         sample_met.to_pickle(pickle_file, compression='gzip')
 
-checkpoint all_merge_met_perchrom:
+rule all_merge_met_perchrom:
     input: expand(rules.merge_met_perchrom.output, sample=unique_samples, chrom=chroms, mettype=mettypes)
 
 
@@ -132,11 +141,11 @@ rule merge_met_hdf5:
         slots='1',
         misc=''
     run:
-        with MetH5File(output[0], 'w') as out_container:
+        with MetcallH5Container(output[0], 'w') as out_container:
             for tsv_file in input:
                 out_container.parse_and_add_nanopolish_file(tsv_file)
         
-checkpoint all_merge_met_hdf5:
+rule all_merge_met_hdf5:
     input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)
 
     

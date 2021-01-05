@@ -28,8 +28,8 @@ rule alignment:
            {samtools} index {output}
            '''
 
-checkpoint all_alignment:
-    input: expand(rules.alignment.output, zip_combinator, sample=sb.sample, batch=sb.batch)
+rule all_alignment:
+    input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
 
 '''
 ##############################################################################

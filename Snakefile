@@ -26,16 +26,29 @@ samples and batches are filled such that zip(samples,batches) would result
 in the full list of sample and batch tuples.
 '''
 
-sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
-if len(sb.sample) == 0:
-    sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5'))
-print(sb)
+class SampleBatchesFilenames:
+    def __init__(self):
+        if os.path.exists(os.path.join(basedir, 'raw')):
+            sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5'))
+            self.sbf_samples = sbf.sample
+            self.sbf_batches = sbf.batch
+            self.sbf_filenames = sbf.filename
+
+            sbdict = {}
+            for s, b in zip(sbf.sample, sbf.batch):
+                sbdict[f"{s}_{b}"] = (s,b)
+            self.sb_samples = [s for s,_ in sbdict.values()]
+            self.sb_batches = [b for _,b in sbdict.values()]
+            
+        elif os.path.exists(os.path.join(basedir, 'fastq')):
+            sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
+            self.sb_samples = sb.sample
+            self.sb_batches = sb.batch
+
+sbf = SampleBatchesFilenames()
 
 def samplebatches(sample):
-    if len(sb.sample) == 0:
-        return [sbf.batch[i] for i in range(len(sbf.batch)) if sbf.sample[i] == sample]
-    else:
-        return [sb.batch[i] for i in range(len(sb.batch)) if sb.sample[i] == sample]
+    return [sbf.sb_batches[i] for i in range(len(sbf.sb_batches)) if sbf.sb_samples[i] == sample]
 
 
 '''
