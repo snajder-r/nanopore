@@ -136,14 +136,14 @@ rule merge_met_hdf5:
     output: os.path.join(basedir, 'met_merged', '{sample}_{mettype}.h5')
     params:
         jobname='mergemet_{sample}_{mettype}',
-        runtime='12:00',
+        runtime='48:00',
         memusage='8000',
         slots='1',
         misc=''
     run:
-        with MetcallH5Container(output[0], 'w') as out_container:
+        with MetH5File(output[0], 'w') as out_container:
             for tsv_file in input:
-                out_container.parse_and_add_nanopolish_file(tsv_file)
+                out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms)
         
 rule all_merge_met_hdf5:
     input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)
