@@ -50,7 +50,7 @@ The following steps are performed:
 def prepare_mergebams_input(wildcards):
     return expand((os.path.join(basedir, 'mapping', '{sample}', 
         '{batch}.sorted.filtered.bam')), 
-        batch=samplebatches[wildcards.sample], sample=wildcards.sample)
+        batch=samplebatches(wildcards.sample), sample=wildcards.sample)
 
 rule prepare_mergebams:
     input: prepare_mergebams_input

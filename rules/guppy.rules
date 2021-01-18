@@ -4,7 +4,7 @@ import shutil
 import subprocess
 
 class GuppyWrapper:
-    def __init__(self, guppy_dir, scratch_dir=None, batch_size=15, gpu=True, cpu_threads=1):
+    def __init__(self, guppy_dir, scratch_dir=None, batch_size=5, gpu=True, cpu_threads=1):
         self.guppy = os.path.join(guppy_dir,'bin','guppy_basecaller')
         self.scratch_dir = scratch_dir
         self.batch_size=batch_size
@@ -72,8 +72,8 @@ class GuppyWrapper:
                 print("Cleaning up %s" % ssd_out)
             finally:
                 pass
-                #shutil.rmtree(ssd_out)
-                #shutil.rmtree(ssd_in)
+                shutil.rmtree(ssd_out)
+                shutil.rmtree(ssd_in)
 
         with open(os.path.join(outputdir,'done'), 'w') as fp: 
             pass
@@ -90,13 +90,14 @@ rule guppy_basecall:
     params:
         outputdir= os.path.join(basedir, 'raw', '{sample}', 'guppy'),
         jobname='guppy_{sample}',
-        runtime='48:00',
-        memusage='32000',
-        slots='1',
-        #misc = '-gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=10G'
-        misc=''
+        runtime='100:00',
+        memusage='28000',
+        slots='8',
+        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
+        #misc=''
     run: 
-        gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
+        #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
+        gw = GuppyWrapper(guppy_dir, scratch_dir='/ssd/r933r/', batch_size=5, gpu=True, cpu_threads=int(params.slots))
         gw.run_guppy_batchwise(input[0], params.outputdir)
 
 rule all_guppy_basecall:

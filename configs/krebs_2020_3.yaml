@@ -9,11 +9,12 @@ nanopolish: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/opt/bin/nanopoli
 minimap2: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/opt/bin/minimap2
 pycoQC: /home/r933r/.conda/envs/gastrulation/bin/pycoQC
 Fast5_to_seq_summary: /home/r933r/.conda/envs/gastrulation/bin/Fast5_to_seq_summary
+guppy_dir: /home/r933r/data/software/users/snajder/guppy/ont-guppy
 
 per_batch: 10
 chroms: [2L,2R,3L,3R,4]
-#unique_samples: [invitro_bc08, invitro_bc09, fresh_embryo]
-unique_samples: [invitro_bc08]
+unique_samples: [invitro_bc08, invitro_bc09, fresh_embryo]
+
 
 mettypes: [cpg,gpc,dam]
 basecall_id: '000'
