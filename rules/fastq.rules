@@ -41,11 +41,14 @@ rule fast5_to_fastq:
             for i in range(len(input)):
                 with h5py.File(input[i],'r') as f:
                     for read in f.keys():
-                        fq = f[read][fastq_group][()].decode('utf8')
-                        fq = fq.split('\n')
-                        if read.startswith('read_'):
-                            read = read[5:]
-                        fq[0] = '@%s'%read
+                        try:
+                            fq = f[read][fastq_group][()].decode('utf8')
+                            fq = fq.split('\n')
+                            if read.startswith('read_'):
+                                read = read[5:]
+                            fq[0] = f'@{read}'
+                        except KeyError:
+                            print(f"Error retreiving {read}/{fastq_group}")
                         of.write('\n'.join(fq))
 
 checkpoint all_fast5_to_fastq:
