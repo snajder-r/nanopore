@@ -13,13 +13,13 @@ class GuppyWrapper:
 
     def run_guppy(self, indir, outdir):
         if self.gpu:
-            guppy_command = '{guppy} --input_path {indir} --save_path {outdir} --device auto ' \
-                    '--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --gpu_runners_per_device 1 ' \
-                    '--fast5_out --post_out'.format(guppy=self.guppy, indir=indir, outdir=outdir).split(' ')
+            guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} --device auto " \
+                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --gpu_runners_per_device 1 " \
+                    "--fast5_out".split(' ')
         else:
-            guppy_command = '{guppy} --input_path {indir} --save_path {outdir} ' \
-                    '--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {threads} ' \
-                    '--fast5_out --post_out'.format(guppy=self.guppy, indir=indir, outdir=outdir, threads=self.cpu_threads).split(' ')
+            guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
+                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {self.cpu_threads} " \
+                    "--fast5_out".split(' ')
             print(guppy_command)
 
 
@@ -30,18 +30,15 @@ class GuppyWrapper:
 
         p.wait()
 
-
-    def run_guppy_batchwise(self, inputdir, outputdir):
+    def run_guppy_batchwise_from_filelist(self, fast5files, outputdir):
         LSB_JOBID=os.getenv('LSB_JOBID')
 
-        fast5files = [f for f in os.listdir(inputdir) if f.endswith('fast5')]
-
         # Filter out files we already basecalled, so we don't do it twice
-        if os.path.exists(outputdir):
-            done_files = os.listdir(outputdir)
-            print('Found %d fast5files. %d files are already basecalled' % (len(fast5files), len(done_files)))
-            fast5files = [f for f in fast5files if not f in done_files]
-            print('Need to basecall %d files' % len(fast5files))
+        #if os.path.exists(outputdir):
+        #    done_files = os.listdir(outputdir)
+        #    print('Found %d fast5files. %d files are already basecalled' % (len(fast5files), len(done_files)))
+        #    fast5files = [f for f in fast5files if not f in done_files]
+        #    print('Need to basecall %d files' % len(fast5files))
 
         batches = [fast5files[i:(i+self.batch_size)] for i in range(0,len(fast5files), self.batch_size)]
 
@@ -57,7 +54,7 @@ class GuppyWrapper:
                 batch = batches[batch_i]
 
                 for f in batch:
-                    shutil.copyfile(os.path.join(inputdir,f), os.path.join(ssd_in,f))
+                    shutil.copyfile(f, os.path.join(ssd_in,os.path.basename(f)))
 
                 self.run_guppy(ssd_in, ssd_out)
 
@@ -75,14 +72,18 @@ class GuppyWrapper:
                 shutil.rmtree(ssd_out)
                 shutil.rmtree(ssd_in)
 
-        with open(os.path.join(outputdir,'done'), 'w') as fp: 
-            pass
+
+    def run_guppy_batchwise(self, inputdir, outputdir):
+        fast5files = [os.path.join(inputdir, f) for f in os.listdir(inputdir) if f.endswith('fast5')]
+        self.run_guppy_batchwise_from_filelist(fast5files, outputdir)
 
 '''
 ##############################################################################
 # GUPPY basecalling
 ##############################################################################
 '''
+
+
 
 rule guppy_basecall:
     input: os.path.join(basedir, 'raw', '{sample}', 'multi')
@@ -103,4 +104,53 @@ rule guppy_basecall:
 rule all_guppy_basecall:
     input: expand(rules.guppy_basecall.output, sample=unique_samples)
 
+
+num_batches = 8
+
+def guppy_basecall_batches(wc):
+    sample = wc["sample"]
+    batch = int(wc["batch"])
+    inputdir = os.path.join(basedir,'raw', sample,'multi')
+    fast5files = sorted([os.path.join(inputdir, f) for f in os.listdir(inputdir) if f.endswith('fast5')])
+    return fast5files[batch::num_batches]
+
+checkpoint guppy_basecall_from_filelist:
+    input: guppy_basecall_batches
+    output: directory(os.path.join(basedir, "raw", "{sample}", "guppy_intermediate", "b_{batch}/"))
+    params:
+        jobname='guppy_{sample}_{batch}',
+        runtime='100:00',
+        memusage='28000',
+        slots='8',
+        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
+        #misc=''
+    run:
+        #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
+        gw = GuppyWrapper(guppy_dir, scratch_dir='/ssd/r933r/', batch_size=5, gpu=True, cpu_threads=int(params.slots))
+        gw.run_guppy_batchwise_from_filelist(input, output[0])
+
+def guppy_basecall_batches_map_back(wc):
+    sample = wc["sample"]
+    filename = wc["filename"]
+    inputdir = os.path.join(basedir,'raw', sample,'multi')
+    fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
+    batch = fast5files.index(filename)%num_batches
+    #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
+    return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
+
+rule move_guppy_basecall_from_batchdir:
+    input: guppy_basecall_batches_map_back
+    output: os.path.join(basedir, "raw", "{sample}", "guppy", "{filename}")
+    shell: "mv {input} {output}"
+
+def all_basecall_from_filelist_input(wc):
+    for sample in unique_samples:
+        for f in os.listdir(os.path.join(basedir, "raw", sample, "multi")):
+            if f.endswith("fast5"):
+                yield os.path.join(basedir, "raw", sample, "guppy", f)
+
+rule all_basecall_from_filelist:
+    input: all_basecall_from_filelist_input
+
+localrules: move_guppy_basecall_from_batchdir
 
