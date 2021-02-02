@@ -66,15 +66,16 @@ rule metcall:
     input: 
         fq=rules.fast5_to_fastq.output,
         bam=rules.alignment.output,
+        bai=f"{rules.alignment.output}.bai",
         fqidx=rules.nanopolish_index.output
     output: os.path.join(basedir, 'met','{sample}','{batch}_met_{mtype}.tsv')
     params:
         jobname='metcall_{sample}_{batch}',
         runtime='16:00',
         memusage='16000',
-        slots='1 -R "span[hosts=1]"',
+        slots='8',
         misc=''
-    shell: '{nanopolish} call-methylation -t 1 -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
+    shell: '{nanopolish} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
 
 rule all_metcall:
     input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
@@ -144,6 +145,7 @@ rule merge_met_hdf5:
         with MetH5File(output[0], 'w') as out_container:
             for tsv_file in input:
                 out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms)
+            out_container.create_chunk_index()
         
 rule all_merge_met_hdf5:
     input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)

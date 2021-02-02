@@ -16,6 +16,8 @@ if 'fastq_ending' not in config.keys():
 if 'chroms' not in config.keys():
     chroms = []
 
+chroms = [str(c) for c in chroms]
+
 '''
 Detect batches for each sample. Fills the global variables:
   samples: flat array of length num_samples x num_batches
@@ -41,11 +43,16 @@ class SampleBatchesFilenames:
             self.sb_batches = [b for _,b in sbdict.values()]
             
         elif os.path.exists(os.path.join(basedir, 'fastq')):
+            print(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
             sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
             self.sb_samples = sb.sample
             self.sb_batches = sb.batch
+            self.sbf_samples = None
+            self.sbf_batches = None
+            self.sbf_filenames = None
 
 sbf = SampleBatchesFilenames()
+print(sbf.sb_batches)
 
 def samplebatches(sample):
     return [sbf.sb_batches[i] for i in range(len(sbf.sb_batches)) if sbf.sb_samples[i] == sample]
@@ -133,11 +140,12 @@ def split_batches_from_file_list(all_files, outdir):
 
 
 def split_batches_input(wildcards):
+    multi_file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'multi', '{fname}.fast5')
     file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy', '{fname}.fast5')
-    return expand(file_path, fname=glob_wildcards(file_path).fname)
+    return expand(file_path, fname=glob_wildcards(multi_file_path).fname)
 
 
-checkpoint split_batches:
+rule split_batches:
     input: split_batches_input
     output: os.path.join(basedir, 'raw', '{sample}', 'batched', 'done')
     params:
@@ -150,10 +158,10 @@ checkpoint split_batches:
 
 def split_batches_from_fastq_input(wildcards):
     file_path = os.path.join(basedir, 'fastq', wildcards['sample'], 'guppy', '{fname}.%s' % fastq_ending)
-    return expand(file_path, fname=glob_wildcards(file_path.fname))
+    return expand(file_path, fname=glob_wildcards(file_path).fname)
 
 
-checkpoint split_batches_from_fastq:
+rule split_batches_from_fastq:
     input: split_batches_from_fastq_input
     output: os.path.join(basedir, 'fastq', '{sample}', 'batched', 'done')
     params:
@@ -163,10 +171,10 @@ checkpoint split_batches_from_fastq:
         with open(output[0], 'w') as fp:
             pass
 
-checkpoint all_split_batches:
+rule all_split_batches:
     input: expand(rules.split_batches.output, sample=unique_samples)
 
-checkpoint all_split_batches_from_fastq:
+rule all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 include: 'rules/fastq.rules'

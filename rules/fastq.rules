@@ -21,9 +21,10 @@ case we just skip that file and move on.
 
 def fast5_to_fastq_input(wildcards):
     indir = os.path.join(basedir,'raw',wildcards['sample'],'batched', wildcards['batch'])
-    for i in range(len(sbf.sbf_filenames)):
-        if sbf.sbf_samples[i] == wildcards['sample'] and sbf.sbf_batches[i] == wildcards['batch']:
-            yield os.path.join(indir, '%s.fast5'%sbf.sbf_filenames[i])
+    if sbf.sbf_filenames is not None:
+        for i in range(len(sbf.sbf_filenames)):
+            if sbf.sbf_samples[i] == wildcards['sample'] and sbf.sbf_batches[i] == wildcards['batch']:
+                yield os.path.join(indir, '%s.fast5'%sbf.sbf_filenames[i])
 
 rule fast5_to_fastq:
     input: fast5_to_fastq_input

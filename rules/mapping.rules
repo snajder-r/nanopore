@@ -16,7 +16,7 @@ The following steps are performed:
 '''
 rule alignment:
     input: rules.fast5_to_fastq.output
-    output: os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam')
+    output: ancient(os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam'))
     params:
         jobname='align_{sample}_{batch}',
         runtime='02:00',
@@ -25,12 +25,21 @@ rule alignment:
         misc=''
     shell: '''
            {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view -q 1 -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output}
-           {samtools} index {output}
            '''
 
 rule all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
 
+rule samtools_index:
+    output: "{filename}.bam.bai"
+    input: "{filename}.bam"
+    params:
+        jobname='samtools_index',
+        runtime='02:00',
+        memusage='8000',
+        slots='1',
+        misc=''
+    shell: "{samtools} index {input}"
 '''
 ##############################################################################
 # Merging of BAM files
