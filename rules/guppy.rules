@@ -133,10 +133,11 @@ def guppy_basecall_batches_map_back(wc):
     sample = wc["sample"]
     filename = wc["filename"]
     inputdir = os.path.join(basedir,'raw', sample,'multi')
-    fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
-    batch = fast5files.index(filename)%num_batches
-    #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
-    return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
+    if os.path.isdir(inputdir):
+        fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
+        batch = fast5files.index(filename)%num_batches
+        #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
+        return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
 
 rule move_guppy_basecall_from_batchdir:
     input: guppy_basecall_batches_map_back

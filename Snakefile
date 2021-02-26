@@ -140,9 +140,9 @@ def split_batches_from_file_list(all_files, outdir):
 
 
 def split_batches_input(wildcards):
-    multi_file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'multi', '{fname}.fast5')
+    #multi_file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'multi', '{fname}.fast5')
     file_path = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy', '{fname}.fast5')
-    return expand(file_path, fname=glob_wildcards(multi_file_path).fname)
+    return expand(file_path, fname=glob_wildcards(file_path).fname)
 
 
 rule split_batches:
@@ -178,7 +178,7 @@ rule all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 include: 'rules/fastq.rules'
-include: 'rules/guppy.rules'
+#include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
 include: 'rules/medaka.rules'
 include: 'rules/megalodon.rules'
