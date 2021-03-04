@@ -14,7 +14,9 @@ if 'unique_samples' not in config.keys():
 if 'fastq_ending' not in config.keys():
     fastq_ending = 'fq'
 if 'chroms' not in config.keys():
-    chroms = []
+    with open(reference, "r") as f:
+        print("Trying to infer chromosomes from reference")
+        chroms = [l[1:].split(" ")[0] for l in f if l.startswith(">")]
 
 chroms = [str(c) for c in chroms]
 
