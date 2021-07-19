@@ -14,6 +14,13 @@ The following steps are performed:
   - Sort bam file
   - Create bam index
 '''
+
+if "mapping_filter_params" not in globals().keys():
+    mapping_filter_params = ""
+
+if "filter_chroms" not in globals().keys():
+    filter_chroms = False
+
 rule alignment:
     input: rules.fast5_to_fastq.output
     output: ancient(os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam'))
@@ -24,8 +31,15 @@ rule alignment:
         slots='8',
         misc=''
     shell: '''
-           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view -q 1 -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output}
-           '''
+           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view {mapping_filter_params} -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
+           ''' + ''' mv {output} {output}.unfiltered;
+           {samtools} index {output}.unfiltered;
+           {samtools} view {output}.unfiltered {chroms} -b > {output};
+           rm {output}.unfiltered;
+           ''' if filter_chroms else ''
+
+rule testmapping:
+    input: expand(rules.alignment.output, sample=["Primary"], batch=[1])
 
 rule all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
