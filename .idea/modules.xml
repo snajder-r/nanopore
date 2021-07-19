@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/nanopore.iml" filepath="$PROJECT_DIR$/.idea/nanopore.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../tf_footprinting/.idea/tf_footprinting.iml" filepath="$PROJECT_DIR$/../tf_footprinting/.idea/tf_footprinting.iml" />
     </modules>
   </component>
 </project>

@@ -54,7 +54,6 @@ class SampleBatchesFilenames:
             self.sbf_filenames = None
 
 sbf = SampleBatchesFilenames()
-print(sbf.sb_batches)
 
 def samplebatches(sample):
     return [sbf.sb_batches[i] for i in range(len(sbf.sb_batches)) if sbf.sb_samples[i] == sample]
@@ -180,7 +179,7 @@ rule all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 include: 'rules/fastq.rules'
-#include: 'rules/guppy.rules'
+include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
 include: 'rules/medaka.rules'
 include: 'rules/megalodon.rules'
@@ -220,10 +219,5 @@ rule report_methylation:
 
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
-
-rule test:
-    #    input: '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/fastq/Germline/0.fastq.index.readdb'
-    input:
-         '/hps/nobackup/research/stegle/users/snajder/medulloblastoma/from_assembly/mapping_chr11_chr17/Germline/124.sorted.filtered.bam'
 
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq
