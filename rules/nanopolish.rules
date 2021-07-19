@@ -142,16 +142,59 @@ rule merge_met_hdf5:
         slots='1',
         misc=''
     run:
-        with MetH5File(output[0], 'w') as out_container:
+        with MetH5File(output[0], 'w', compression=None) as out_container:
             for tsv_file in input:
-                out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms)
+                with open(f"/homes/snajder/testlog_{wildcards['sample']}.log", "a") as f:
+                    f.write(tsv_file)
+                out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms, postpone_sorting_until_close=True)
+
             out_container.create_chunk_index()
-        
+
 rule all_merge_met_hdf5:
     input: expand(rules.merge_met_hdf5.output, sample=unique_samples, mettype=mettypes)
 
-    
-    
+chrombatchsize=50
 
-    
-    
+rule merge_met_hdf5_temp_chromwise:
+    input: merge_met_hdf5_input
+    output: os.path.join(basedir, 'met_merged_mr', '{sample}_{mettype}_{chrombatch}.tsv')
+    params:
+        jobname='mergemet_{sample}_{mettype}_{chrombatch}',
+        runtime='6:00',
+        memusage='2000',
+        slots='1',
+        misc=''
+    run:
+        chrombatch = int(wildcards["chrombatch"])
+        batchchroms = set(chroms[chrombatch*chrombatchsize:(chrombatch+1)*chrombatchsize])
+        with open(output[0], 'w') as out_f:
+            virgin = True
+            for tsv_file in input:
+                with open(tsv_file, "r") as tsv_f:
+                    header = tsv_f.readline()
+                    if virgin:
+                        out_f.write(header)
+                        virgin = False
+                    for line in tsv_f:
+                        line_chrom = line.split("\t")[0]
+                        if line_chrom in batchchroms:
+                            out_f.write(line)
+                out_f.flush()
+
+rule merge_met_hdf5_optimized_for_many_chromosomes:
+    input: expand(rules.merge_met_hdf5_temp_chromwise.output, sample="{sample}", mettype="{mettype}", chrombatch=range(int(np.ceil(len(chroms)/chrombatchsize))))
+    output: os.path.join(basedir,'met_merged_mr','{sample}_{mettype}.h5')
+    params:
+        jobname='mergemet_{sample}_{mettype}',
+        runtime='48:00',
+        memusage='32000',
+        slots='1',
+        misc=''
+    run:
+        with MetH5File(output[0],'w',compression="gzip") as out_container:
+            for tsv_file in input:
+                out_container.parse_and_add_nanopolish_file(tsv_file, postpone_sorting_until_close=True)
+            out_container.create_chunk_index()
+
+rule all_merge_met_hdf5_optimized_for_many_chromosomes:
+    input: expand(rules.merge_met_hdf5_optimized_for_many_chromosomes.output, sample=unique_samples, mettype=mettypes)
