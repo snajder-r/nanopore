@@ -1,0 +1,120 @@
+from pathlib import Path
+
+default_prediction_params = {"jobname":'pred_nanopolish', "runtime":'24:00', "memusage":'16000',
+        "slots":'8', "misc":'', "alphabet": "m5c"}
+
+default_smalljob_params = {"runtime":'4:00', "memusage":'16000', "slots":'2', "misc":''}
+default_largememjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'2', "misc":''}
+
+nanopolish_predict_script = """
+    mkdir -p {params.outdir}
+    cp {input.model} {output.model}
+    echo $(basename {input.model}) > {output.model_fof}
+    # Sub-shell because nanopolish requires us to change directory
+    (
+        cd {params.outdir}
+        {nanopolish_acc} call-accessibility -t {params.slots} --min-flank {params.min_flank} --reads {input.fq} -m {output.model_fof} --bam {input.bam} --genome {reference} --methylation {params.alphabet} > {output.prediction}
+    )
+    """
+
+def predict_accessibility_outdir():
+    return Path(basedir).joinpath('nanopolish_accessibility', '{sample}', 'flank_{minflank}', '{batch}')
+
+rule predict_accessibility:
+    input:
+        fq=rules.fast5_to_fastq.output,
+        fqindex=rules.nanopolish_index.output,
+        bam=rules.alignment.output,
+        bai=f"{rules.alignment.output}.bai",
+        model=accessibility_model
+    output:
+        model = temp(predict_accessibility_outdir().joinpath('r9.4_450bps.m5c.6mer.template.model')),
+        model_fof=temp(predict_accessibility_outdir().joinpath('model_fof.txt')),
+        prediction=predict_accessibility_outdir().joinpath('accessibility_prediction.tsv')
+    params:
+        **default_prediction_params,
+        outdir = str(predict_accessibility_outdir()),
+        min_flank = lambda wildcards: wildcards["minflank"],
+    shell: nanopolish_predict_script
+
+
+
+#rule all_predict_accessibility:
+#    input: expand(rules.predict_accessibility.output.prediction, zip, sample=sbf.sb_samples, batch=sbf.sb_batches)
+
+
+rule accessibility_to_betascore_map:
+    input:
+        coords_file=coords_file,
+        accessibility=rules.predict_accessibility.output.prediction
+    output:
+        predict_accessibility_outdir().joinpath("sum_binarized_calls_thres_{thres}.tsv")
+    params:
+        **default_smalljob_params,
+        jobname="map_betasscore",
+    run:
+        from nanopolish_smf.bsseq import load_pickled_bsseq
+        from nanopolish_smf.annotation import load_all_cggc_coords
+        from nanopolish_smf.accessibility import AccessibilityProfile
+        threshold = float(wildcards["thres"])
+        print("Reading bsseq coordinates")
+        bs_seq = load_pickled_bsseq(input.coords_file)
+        bs_chrom_grouped = bs_seq.groupby("chrom")
+        print("Reading requested coordinates")
+        all_coords = load_all_cggc_coords()
+        coords_bs_seq = {chrom: bs_chrom_grouped.get_group(chrom)["start"].values for chrom in all_coords.keys() if chrom in bs_chrom_grouped.groups}
+        print("Counting")
+        part_counts = AccessibilityProfile.read_binarized_call_sums(all_coords,input.accessibility,threshold=threshold)
+        bs_seq = bs_seq.set_index(["chrom", "start"])
+        part_counts = part_counts.set_index(["chrom", "start"])
+        overlap_index = part_counts.index.intersection(bs_seq.index)
+        part_counts["in_bs_seq"] = False
+        part_counts.at[overlap_index, "in_bs_seq"] = True
+        part_counts = part_counts.reset_index()
+        print("Writing output")
+        part_counts.to_csv(output[0], sep="\t", index=False)
+
+#rule all_accessibility_to_betascore_map:
+#    input: expand(rules.accessibility_to_betascore_map.output, zip, sample=sbf.sb_samples, batch=sbf.sb_batches, thres="{thres}")
+
+all_flanking_options = [6,8,10]
+all_thresholds = ["1.0","1.5","2.0","2.5"]
+def accessibility_to_betascore_reduce_input(wildcards):
+    return expand(rules.accessibility_to_betascore_map.output, sample="{sample}", batch=samplebatches(wildcards.sample), thres="{thres}", minflank="{minflank}")
+
+def reduce_betascore_matrix(inputfiles, outputfile):
+    import pandas as pd
+    df_out = None
+    for file in inputfiles:
+        df_cur = pd.read_csv(file,sep="\t").set_index(["chrom", "start"])
+        if df_out is None:
+            df_out = df_cur
+        else:
+            df_out = df_out.add(df_cur, fill_value=0)
+    df_out["met_rate"] = df_out["met"] / df_out["reads"]
+    df_out["in_bs_seq"] = df_out["in_bs_seq"] > 0
+    df_out.to_csv(outputfile,sep="\t",index=True)
+
+rule accessibility_to_betascore_reduce:
+    input: accessibility_to_betascore_reduce_input
+    output: Path(basedir).joinpath('nanopolish_accessibility').joinpath("{sample}_met_rate_thres_{thres}_flank_{minflank}.tsv")
+    params:
+        **default_largememjob_params,
+        jobname="reduce_betasscore",
+    run:
+        reduce_betascore_matrix(input, output[0])
+
+rule all_accessibility_to_betascore_reduce:
+    input: expand(rules.accessibility_to_betascore_reduce.output, sample=unique_samples, thres=all_thresholds, minflank=all_flanking_options)
+
+rule betascore_reduce_all_samples:
+    input: expand(rules.accessibility_to_betascore_reduce.output,sample=unique_samples, thres="{thres}",minflank="{minflank}")
+    output: Path(basedir).joinpath('nanopolish_accessibility'). joinpath("ALLmet_rate_thres_{thres}_flank_{minflank}.tsv")
+    params:
+        **default_largememjob_params,
+        jobname="reduce_betasscore",
+    run:
+        reduce_betascore_matrix(input,output[0])
+
+rule all_betascore_reduce_all_samples:
+    input: expand(rules.betascore_reduce_all_samples.output,thres=all_thresholds, minflank=all_flanking_options)

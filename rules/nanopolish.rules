@@ -1,5 +1,7 @@
-from meth5.meth5_wrapper import MetH5File
+import pandas as pd
 
+from meth5.meth5 import MetH5File
+default_smalljob_params = {"runtime":'4:00', "memusage":'16000', "slots":'2', "misc":''}
 '''
 ##############################################################################
 # Methylation calling using nanopolish
@@ -75,7 +77,10 @@ rule metcall:
         memusage='16000',
         slots='8',
         misc=''
-    shell: '{nanopolish} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}'
+    shell: """
+    echo "{nanopolish} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}" 
+    {nanopolish} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} > {output}
+    """
 
 rule all_metcall:
     input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
@@ -144,10 +149,7 @@ rule merge_met_hdf5:
     run:
         with MetH5File(output[0], 'w', compression=None) as out_container:
             for tsv_file in input:
-                with open(f"/homes/snajder/testlog_{wildcards['sample']}.log", "a") as f:
-                    f.write(tsv_file)
                 out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms, postpone_sorting_until_close=True)
-
             out_container.create_chunk_index()
 
 rule all_merge_met_hdf5:
@@ -198,3 +200,58 @@ rule merge_met_hdf5_optimized_for_many_chromosomes:
 
 rule all_merge_met_hdf5_optimized_for_many_chromosomes:
     input: expand(rules.merge_met_hdf5_optimized_for_many_chromosomes.output, sample=unique_samples, mettype=mettypes)
+
+
+rule nanopolish_to_betascore:
+    input:
+        coords_file = coords_file,
+        methylation_cpg = expand(rules.merge_met_hdf5.output, sample="{sample}", mettype="cpg"),
+        methylation_gpc = expand(rules.merge_met_hdf5.output, sample="{sample}", mettype="gpc")
+    output: Path(basedir).joinpath('met_merged').joinpath("{sample}_met_rate.tsv")
+    params:
+        runtime='24:00',
+        memusage='32000',
+        slots = "48",
+        misc="",
+        jobname="np_betasscore_{sample}",
+    run:
+        from nanopolish_smf.bsseq import load_pickled_bsseq
+        from nanopolish_smf.annotation import load_all_cggc_coords
+        from nanopolish_smf.methylation import read_binarized_call_sums_from_meth5
+        print("Reading BS seq coordinates")
+        bs_seq = load_pickled_bsseq(input.coords_file)
+        print("Grouping")
+        bs_chrom_grouped = bs_seq.groupby("chrom")
+        coords_bs_seq = {chrom: bs_chrom_grouped.get_group(chrom)["start"].values for chrom in chroms}
+        print("Reading all motif coordinates")
+        all_coords = load_all_cggc_coords()
+        print("Start counting")
+        virgin = True
+        for chrom_df in read_binarized_call_sums_from_meth5(all_coords,
+                [input.methylation_gpc[0],input.methylation_cpg[0]], threshold=2, processes=int(params.slots)):
+            print("Compute overall met rates")
+            chrom_df["met_rate"] = chrom_df["met"] / chrom_df["reads"]
+            print("Writing output")
+            chrom_df.to_csv(output[0], sep="\t", index=False, mode="w" if virgin else "a", header=virgin)
+            virgin = False
+
+rule all_nanopolish_to_betascore:
+    input: expand(rules.nanopolish_to_betascore.output, sample=unique_samples)
+
+rule reduce_all_samples_betascore:
+    input: expand(rules.nanopolish_to_betascore.output,sample=unique_samples)
+    output: Path(basedir).joinpath('met_merged').joinpath("ALLmet_rate.tsv")
+    params:
+        **default_smalljob_params,
+        jobname="all_reduce_bs"
+    run:
+        import pandas as pd
+        df_out = None
+        for file in input:
+            df_cur = pd.read_csv(file, sep="\t").set_index(["chrom", "start"])
+            if df_out is None:
+                df_out = df_cur
+            else:
+                df_out = df_out.add(df_cur, fill_value=0)
+        df_out["met_rate"] = df_out["met"] / df_out["reads"]
+        df_out.to_csv(output[0],sep="\t",index=True)

@@ -1,0 +1,28 @@
+accessibility_model: /home/snajder/data/projects/tf_footprinting/nanopore_accessibility/trained_models/m5c_2021_08_01/r9.4_450bps.m5c.6mer.template.model
+threads: 32
+
+basedir: /scratch/snajder/nanopore_runs/run6
+
+python: /home/snajder/miniconda3/envs/nanopore/bin/python
+reference: /home/snajder/data/projects/tf_footprinting/reference/dmel-all-chromosome-r6.29.fasta
+
+samtools: /g/stegle/snajder/software/opt/bin/samtools
+nanopolish_acc: /home/snajder/data/code/nanopolish/nanopolish
+nanopolish: /home/snajder/data/code/nanopolish_orig/nanopolish
+
+minimap2: /g/stegle/snajder/software/opt/bin/minimap2
+pycoQC: /home/snajder/miniconda3/envs/nanopore/bin/pycoQC
+
+guppy_dir: /home/snajder/data/software/guppy/ont-guppy_4.4.1/
+
+per_batch: 4
+chroms: [2L,2R,3L,3R,4]
+unique_samples: [sample, jun_part1, jun_part2]
+
+scratch_dir: /scratch/snajder/tmp/
+gpu_params: '--gpus 1'
+
+mettypes: [cpg,gpc]
+basecall_id: '000'
+
+coords_file: /g/krebs/group_folder/smf_nanopore/analysis/acc_reference/run6/Context_met_call_V3_2021-04-20_GW_S2_std_pep_20L_FP_DE_Co19.pkl.gz

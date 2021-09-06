@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="75fafb1a-1dd6-4ca9-a909-37b304cf5b06" name="embl">
+        <fileTransfer rootFolder="/g/stegle/snajder/code" accessType="SFTP" host="embl" port="22" sshConfigId="88a0222b-f5a5-495e-8749-9ecbe4f8c50d" sshConfig="snajder@embl:22 agent" authAgent="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

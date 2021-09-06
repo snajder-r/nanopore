@@ -86,7 +86,7 @@ class GuppyWrapper:
 
 
 rule guppy_basecall:
-    input: os.path.join(basedir, 'raw', '{sample}', 'multi')
+    input: os.path.join(basedir, 'raw', '{sample}', 'original')
     output: os.path.join(basedir, 'raw', '{sample}', 'guppy','done')
     params:
         outputdir= os.path.join(basedir, 'raw', '{sample}', 'guppy'),
@@ -110,7 +110,7 @@ num_batches = 8
 def guppy_basecall_batches(wc):
     sample = wc["sample"]
     batch = int(wc["batch"])
-    inputdir = os.path.join(basedir,'raw', sample,'multi')
+    inputdir = os.path.join(basedir,'raw', sample,'original')
     fast5files = sorted([os.path.join(inputdir, f) for f in os.listdir(inputdir) if f.endswith('fast5')])
     return fast5files[batch::num_batches]
 
@@ -122,22 +122,24 @@ checkpoint guppy_basecall_from_filelist:
         runtime='100:00',
         memusage='28000',
         slots='8',
-        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
+        misc = gpu_params
         #misc=''
     run:
         #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
-        gw = GuppyWrapper(guppy_dir, scratch_dir='/ssd/r933r/', batch_size=5, gpu=True, cpu_threads=int(params.slots))
+        gw = GuppyWrapper(guppy_dir, scratch_dir=scratch_dir, batch_size=5, gpu=True, cpu_threads=int(params.slots))
         gw.run_guppy_batchwise_from_filelist(input, output[0])
 
 def guppy_basecall_batches_map_back(wc):
     sample = wc["sample"]
     filename = wc["filename"]
-    inputdir = os.path.join(basedir,'raw', sample,'multi')
+    inputdir = os.path.join(basedir,'raw', sample,'original')
     if os.path.isdir(inputdir):
         fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
         batch = fast5files.index(filename)%num_batches
         #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
         return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
+    else:
+        return []
 
 rule move_guppy_basecall_from_batchdir:
     input: guppy_basecall_batches_map_back
@@ -146,7 +148,7 @@ rule move_guppy_basecall_from_batchdir:
 
 def all_basecall_from_filelist_input(wc):
     for sample in unique_samples:
-        for f in os.listdir(os.path.join(basedir, "raw", sample, "multi")):
+        for f in os.listdir(os.path.join(basedir, "raw", sample, "original")):
             if f.endswith("fast5"):
                 yield os.path.join(basedir, "raw", sample, "guppy", f)
 

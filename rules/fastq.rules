@@ -48,9 +48,10 @@ rule fast5_to_fastq:
                             if read.startswith('read_'):
                                 read = read[5:]
                             fq[0] = f'@{read}'
+                            of.write('\n'.join(fq))
                         except KeyError:
                             print(f"Error retreiving {read}/{fastq_group}")
-                        of.write('\n'.join(fq))
+
 
 checkpoint all_fast5_to_fastq:
     input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sbf_samples,  batch=sbf.sbf_batches)

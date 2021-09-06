@@ -23,23 +23,20 @@ if "filter_chroms" not in globals().keys():
 
 rule alignment:
     input: rules.fast5_to_fastq.output
-    output: ancient(os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam'))
+    output: os.path.join(basedir,'mapping/{sample}/{batch}.sorted.filtered.bam')
     params:
         jobname='align_{sample}_{batch}',
-        runtime='02:00',
+        runtime='08:00',
         memusage='32000',
         slots='8',
         misc=''
     shell: '''
-           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} | {samtools} view {mapping_filter_params} -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
-           ''' + ''' mv {output} {output}.unfiltered;
+           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} --MD | {samtools} view {mapping_filter_params} -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
+           ''' + (''' mv {output} {output}.unfiltered;
            {samtools} index {output}.unfiltered;
            {samtools} view {output}.unfiltered {chroms} -b > {output};
            rm {output}.unfiltered;
-           ''' if filter_chroms else ''
-
-rule testmapping:
-    input: expand(rules.alignment.output, sample=["Primary"], batch=[1])
+           ''' if filter_chroms else '')
 
 rule all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)

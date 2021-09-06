@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="worker01">
+  <component name="PublishConfigData" serverName="embl">
     <serverData>
+      <paths name="embl">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/nanopore" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="worker01">
         <serverdata>
           <mappings>

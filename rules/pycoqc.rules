@@ -11,7 +11,7 @@ rule fast5_to_seq_summary:
         jobname='fast5_to_seq_summary_{sample}',
         runtime='24:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]"',
+        slots='32',
         misc=''
     shell: '{Fast5_to_seq_summary} --fast5_dir {input} --seq_summary_fn {output} --threads 32 --basecall_id {basecall_id}'
 

@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -19,6 +20,8 @@ if 'chroms' not in config.keys():
         chroms = [l[1:].split(" ")[0] for l in f if l.startswith(">")]
 
 chroms = [str(c) for c in chroms]
+
+#basedir = Path(basedir)
 
 '''
 Detect batches for each sample. Fills the global variables:
@@ -53,6 +56,7 @@ class SampleBatchesFilenames:
             self.sbf_batches = None
             self.sbf_filenames = None
 
+print(basedir)
 sbf = SampleBatchesFilenames()
 
 def samplebatches(sample):
@@ -188,6 +192,7 @@ include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
 include: 'rules/tombo.rules'
 include: 'rules/edgecase.rules'
+include: 'rules/accessibility_prediction.rules'
 
 include: 'rules.d/custom.rules'
 

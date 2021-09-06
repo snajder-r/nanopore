@@ -39,7 +39,7 @@ rule tombo_resquiggle:
         jobname='tombo_resquiggle',
         runtime='48:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]"',
+        slots='32',
         misc=''
     shell: '''
            {tombo} resquiggle --processes 32 --dna {input.directory} {reference};
@@ -60,7 +60,7 @@ rule tombo_metcall:
         jobname='tombo_metcall',
         runtime='48:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]"',
+        slots='32',
         misc=''
     shell: '''
            {tombo} detect_modifications alternative_model --fast5-basedirs {input.directory} --statistics-file-basename {basedir}/tombo/{wildcards.sample} --alternate-bases 6mA 5mC --processes 32
@@ -80,7 +80,7 @@ rule tombo_de_novo:
         jobname='tombo_metcall',
         runtime='48:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]"',
+        slots='32',
         misc=''
     shell: '''
            {tombo} detect_modifications de_novo --fast5-basedirs {input.directory} --statistics-file-basename {basedir}/tombo/{wildcards.sample}_denovo --processes 32

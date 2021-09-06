@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig authType="OPEN_SSH" host="embl" id="88a0222b-f5a5-495e-8749-9ecbe4f8c50d" port="22" nameFormat="DESCRIPTIVE" username="snajder" />
+    </configs>
+  </component>
+</project>

@@ -23,7 +23,7 @@ rule megalodon:
         jobname='megalodon_{sample}_{batch}',
         runtime='48:00',
         memusage='16000',
-        slots='16 -R "span[hosts=1]"',
+        slots='16',
         misc=''
     shell: '{megalodon} --guppy-params "--cpu_threads_per_caller 16" --guppy-server-path {guppy} --overwrite --output-directory %s --mod-calibration-filename {megalodon_calibration} --outputs=mod_basecalls {input}' % os.path.join(basedir, 'megalodon/{wildcards.sample}/{wildcards.batch}/')
 

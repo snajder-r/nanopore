@@ -18,7 +18,7 @@ rule medaka_align:
         jobname='medaka_align_{sample}_{batch}',
         runtime='18:00',
         memusage='16000',
-        slots='32 -R "span[hosts=1]"',
+        slots='32',
         misc=''
     shell: '''
            module load samtools;

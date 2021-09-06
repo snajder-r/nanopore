@@ -16,7 +16,7 @@ rule varcall:
         jobname='varcall_{sample}',
         runtime='24:00',
         memusage='16000',
-        slots='16 -R "span[hosts=1]"',
+        slots='16',
         misc=''
     shell: '''
            module load gcc/5.4.0
