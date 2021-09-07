@@ -14,11 +14,11 @@ class GuppyWrapper:
     def run_guppy(self, indir, outdir):
         if self.gpu:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} --device auto " \
-                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --gpu_runners_per_device 1 " \
+                    "--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --gpu_runners_per_device 1 " \
                     "--fast5_out".split(' ')
         else:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
-                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {self.cpu_threads} " \
+                    "--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --num_callers {self.cpu_threads} " \
                     "--fast5_out".split(' ')
             print(guppy_command)
 
@@ -94,11 +94,11 @@ rule guppy_basecall:
         runtime='100:00',
         memusage='28000',
         slots='8',
-        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
+        misc = '-q gpu-lowprio -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
         #misc=''
     run: 
         #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
-        gw = GuppyWrapper(guppy_dir, scratch_dir='/ssd/r933r/', batch_size=5, gpu=True, cpu_threads=int(params.slots))
+        gw = GuppyWrapper(guppy_dir, scratch_dir=scratch_dir, batch_size=5, gpu=True, cpu_threads=int(params.slots))
         gw.run_guppy_batchwise(input[0], params.outputdir)
 
 rule all_guppy_basecall:
@@ -123,9 +123,7 @@ checkpoint guppy_basecall_from_filelist:
         memusage='28000',
         slots='8',
         misc = gpu_params
-        #misc=''
     run:
-        #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
         gw = GuppyWrapper(guppy_dir, scratch_dir=scratch_dir, batch_size=5, gpu=True, cpu_threads=int(params.slots))
         gw.run_guppy_batchwise_from_filelist(input, output[0])
 
@@ -137,14 +135,14 @@ def guppy_basecall_batches_map_back(wc):
         fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
         batch = fast5files.index(filename)%num_batches
         #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
-        return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
+        return checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0]
     else:
         return []
 
 rule move_guppy_basecall_from_batchdir:
     input: guppy_basecall_batches_map_back
     output: os.path.join(basedir, "raw", "{sample}", "guppy", "{filename}")
-    shell: "mv {input} {output}"
+    shell: "mv {input}/{wildcards.filename} {output}"
 
 def all_basecall_from_filelist_input(wc):
     for sample in unique_samples:
