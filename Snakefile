@@ -192,7 +192,11 @@ include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
 include: 'rules/tombo.rules'
 include: 'rules/edgecase.rules'
-include: 'rules/accessibility_prediction.rules'
+
+if "accessibility_model" in globals():
+    include: 'rules/accessibility_prediction.rules'
+else:
+    print("accessibility_model not defined in config. Support for accessibility prediction disabled")
 
 include: 'rules.d/custom.rules'
 
