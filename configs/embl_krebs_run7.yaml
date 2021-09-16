@@ -13,16 +13,21 @@ nanopolish: /home/snajder/data/code/nanopolish_orig/nanopolish
 minimap2: /g/stegle/snajder/software/opt/bin/minimap2
 pycoQC: /home/snajder/miniconda3/envs/nanopore/bin/pycoQC
 
-guppy_dir: /home/snajder/data/software/guppy/ont-guppy_4.4.1/
+guppy_dir: /g/krebs/group_folder/smf_nanopore/tools/guppy/ont-guppy
 
 per_batch: 4
-chroms: [2L,2R,3L,3R,4]
+chroms: [2L,2R,3L,3R,4,X,Y,mitochondrion_genome]
 unique_samples: [sample]
 
+mapping_filter_params: -F 2304
+filter_chroms: True
+
+use_gpu_for_guppy: True
 scratch_dir: /scratch/snajder/tmp/
-gpu_params: '--gpus 1'
+jobid_env_var: SLURM_JOB_ID
+gpu_params: '-p gpu --gres=gpu:1'
 
 mettypes: [cpg,gpc]
-basecall_id: '000'
+basecall_id: '001'
 
 coords_file: /g/krebs/group_folder/smf_nanopore/analysis/acc_reference/run7/Context_met_call_V2_2021-06-11_GW_emb_2-4h_beads_DSP_test_Co19.pkl.gz
