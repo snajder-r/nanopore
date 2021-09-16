@@ -3,6 +3,16 @@ import sys
 import shutil
 import subprocess
 
+
+if "use_gpu_for_guppy" not in globals().keys():
+    use_gpu_for_guppy = True
+
+if "scratch_dir" not in globals().keys():
+    scratch_dir=os.path.join(basedir,'tmp')
+
+if "jobid_env_var" not in globals().keys():
+    jobid_env_var="LSB_JOBID"
+
 class GuppyWrapper:
     def __init__(self, guppy_dir, scratch_dir=None, batch_size=5, gpu=True, cpu_threads=1):
         self.guppy = os.path.join(guppy_dir,'bin','guppy_basecaller')
@@ -14,11 +24,11 @@ class GuppyWrapper:
     def run_guppy(self, indir, outdir):
         if self.gpu:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} --device auto " \
-                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --gpu_runners_per_device 1 " \
+                    "--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --gpu_runners_per_device 1 " \
                     "--fast5_out".split(' ')
         else:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
-                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {self.cpu_threads} " \
+                    f"--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --cpu_threads_per_caller {self.cpu_threads} " \
                     "--fast5_out".split(' ')
             print(guppy_command)
 
@@ -31,7 +41,7 @@ class GuppyWrapper:
         p.wait()
 
     def run_guppy_batchwise_from_filelist(self, fast5files, outputdir):
-        LSB_JOBID=os.getenv('LSB_JOBID')
+        LSB_JOBID=os.getenv(jobid_env_var)
 
         # Filter out files we already basecalled, so we don't do it twice
         #if os.path.exists(outputdir):
@@ -83,28 +93,6 @@ class GuppyWrapper:
 ##############################################################################
 '''
 
-
-
-rule guppy_basecall:
-    input: os.path.join(basedir, 'raw', '{sample}', 'original')
-    output: os.path.join(basedir, 'raw', '{sample}', 'guppy','done')
-    params:
-        outputdir= os.path.join(basedir, 'raw', '{sample}', 'guppy'),
-        jobname='guppy_{sample}',
-        runtime='100:00',
-        memusage='28000',
-        slots='8',
-        misc = '-q gputest -gpu num=1:j_exclusive=yes:mode=exclusive_process:gmem=6G'
-        #misc=''
-    run: 
-        #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
-        gw = GuppyWrapper(guppy_dir, scratch_dir='/ssd/r933r/', batch_size=5, gpu=True, cpu_threads=int(params.slots))
-        gw.run_guppy_batchwise(input[0], params.outputdir)
-
-rule all_guppy_basecall:
-    input: expand(rules.guppy_basecall.output, sample=unique_samples)
-
-
 num_batches = 8
 
 def guppy_basecall_batches(wc):
@@ -119,14 +107,13 @@ checkpoint guppy_basecall_from_filelist:
     output: directory(os.path.join(basedir, "raw", "{sample}", "guppy_intermediate", "b_{batch}/"))
     params:
         jobname='guppy_{sample}_{batch}',
-        runtime='100:00',
-        memusage='28000',
-        slots='8',
-        misc = gpu_params
+        runtime='48:00',
+        memusage='8000' if use_gpu_for_guppy else "32000",
+        slots='8' if use_gpu_for_guppy else "32",
+        misc = gpu_params if use_gpu_for_guppy else ""
         #misc=''
     run:
-        #gw = GuppyWrapper(guppy_dir, scratch_dir=os.path.join(basedir, 'tmp'), batch_size=5, gpu=False, cpu_threads=int(params.slots))
-        gw = GuppyWrapper(guppy_dir, scratch_dir=scratch_dir, batch_size=5, gpu=True, cpu_threads=int(params.slots))
+        gw = GuppyWrapper(guppy_dir,scratch_dir=scratch_dir,batch_size=5,gpu=use_gpu_for_guppy,cpu_threads=int(params.slots))
         gw.run_guppy_batchwise_from_filelist(input, output[0])
 
 def guppy_basecall_batches_map_back(wc):
