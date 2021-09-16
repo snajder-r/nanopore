@@ -15,11 +15,17 @@ The following steps are performed:
   - Create bam index
 '''
 
+
+
 if "mapping_filter_params" not in globals().keys():
     mapping_filter_params = ""
 
 if "filter_chroms" not in globals().keys():
     filter_chroms = False
+
+filter_bams = mapping_filter_params != "" or filter_chroms
+if filter_chroms:
+    chrom_filter_string = " ".join(chroms)
 
 rule alignment:
     input: rules.fast5_to_fastq.output
@@ -31,12 +37,12 @@ rule alignment:
         slots='8',
         misc=''
     shell: '''
-           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} --MD | {samtools} view {mapping_filter_params} -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
+           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} --MD | {samtools} view -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
            ''' + (''' mv {output} {output}.unfiltered;
            {samtools} index {output}.unfiltered;
-           {samtools} view {output}.unfiltered {chroms} -b > {output};
+           {samtools} view {mapping_filter_params} {output}.unfiltered {chrom_filter_string} -b > {output};
            rm {output}.unfiltered;
-           ''' if filter_chroms else '')
+           ''' if filter_bams else '')
 
 rule all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
