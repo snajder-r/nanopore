@@ -28,7 +28,7 @@ class GuppyWrapper:
                     "--fast5_out".split(' ')
         else:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
-                    f"--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --cpu_threads_per_caller {self.cpu_threads} " \
+                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {self.cpu_threads} " \
                     "--fast5_out".split(' ')
             print(guppy_command)
 
@@ -124,14 +124,14 @@ def guppy_basecall_batches_map_back(wc):
         fast5files = sorted([f for f in os.listdir(inputdir) if f.endswith('fast5')])
         batch = fast5files.index(filename)%num_batches
         #return os.path.join(basedir, "raw", sample, "guppy_intermediate", f"b_{batch}", filename)
-        return os.path.join(checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0], filename)
+        return checkpoints.guppy_basecall_from_filelist.get(sample=sample, batch=batch).output[0]
     else:
         return []
 
 rule move_guppy_basecall_from_batchdir:
     input: guppy_basecall_batches_map_back
     output: os.path.join(basedir, "raw", "{sample}", "guppy", "{filename}")
-    shell: "mv {input} {output}"
+    shell: "mv {input}/{wildcards.filename} {output}"
 
 def all_basecall_from_filelist_input(wc):
     for sample in unique_samples:
