@@ -1,11 +1,14 @@
 threads: 32
 
-basedir: /omics/groups/OE0540/internal/projects/chromothripsis_medulloblastoma/ont_pdx_2021/wgs_met_analysis/
+basedir: /omics/groups/OE0540/internal/projects/chromothripsis_medulloblastoma/ont_pdx_2021/dm_analysis
 
 python: /icgc/dkfzlsdf/analysis/B260/software/users/snajder/miniconda3/envs/nanopore/bin/python
-reference: /omics/groups/OE0540/internal/users/snajder/reference/GRCH38/Homo_sapiens.GRCh38.dna_sm.primary_assembly.fa
+
+reference: /omics/groups/OE0540/internal/projects/chromothripsis_medulloblastoma/ont_pdx_2021/dm_analysis/reference/assembly_contigs.v1.fa
 samtools: /tbi/software/x86_64/samtools/samtools-1.5/el7/bin/samtools
 nanopolish: /omics/groups/OE0540/internal/software/users/snajder/nanopolish/nanopolish/nanopolish
+
+mapping_filter_params: -q 60 -F 260
 
 minimap2: /omics/groups/OE0540/internal/software/users/snajder/minimap/minimap2/minimap2
 pycoQC: /omics/groups/OE0540/internal/software/users/snajder/miniconda3/envs/nanopore/bin/pycoQC

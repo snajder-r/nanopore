@@ -229,4 +229,5 @@ rule report_methylation:
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
 
+
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq
