@@ -185,12 +185,9 @@ rule all_split_batches_from_fastq:
 include: 'rules/fastq.rules'
 include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
-include: 'rules/medaka.rules'
-include: 'rules/megalodon.rules'
 include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
-include: 'rules/tombo.rules'
 include: 'rules/edgecase.rules'
 
 if "accessibility_model" in globals():
