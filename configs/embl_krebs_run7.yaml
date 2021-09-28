@@ -1,11 +1,12 @@
 accessibility_model: /home/snajder/data/projects/tf_footprinting/nanopore_accessibility/trained_models/m5c_2021_08_01/r9.4_450bps.m5c.6mer.template.model
 threads: 32
 
-basedir: /scratch/snajder/nanopore_runs/run7
+basedir: /g/krebs/group_folder/smf_nanopore/analysis/nanopore_runs/run7
 
 python: /home/snajder/miniconda3/envs/nanopore/bin/python
 reference: /home/snajder/data/projects/tf_footprinting/reference/dmel-all-chromosome-r6.29.fasta
 
+Fast5_to_seq_summary: /home/snajder/miniconda3/envs/nanopore/bin/Fast5_to_seq_summary
 samtools: /g/stegle/snajder/software/opt/bin/samtools
 nanopolish_acc: /home/snajder/data/code/nanopolish/nanopolish
 nanopolish: /home/snajder/data/code/nanopolish_orig/nanopolish
@@ -29,5 +30,12 @@ gpu_params: '-p gpu --gres=gpu:1'
 
 mettypes: [cpg,gpc]
 basecall_id: '001'
+keep_unfiltered_bam: True
+
+tabix: /g/easybuild/x86_64/CentOS/7/skylake/software/tabix/0.2.6-GCCcore-7.3.0/bin/tabix
+bgzip: /g/easybuild/x86_64/CentOS/7/skylake/software/tabix/0.2.6-GCCcore-7.3.0/bin/bgzip
+
+custom_rules:
+  - project_smfnanopore.rules
 
 coords_file: /g/krebs/group_folder/smf_nanopore/analysis/acc_reference/run7/Context_met_call_V2_2021-06-11_GW_emb_2-4h_beads_DSP_test_Co19.pkl.gz

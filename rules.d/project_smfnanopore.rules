@@ -1,0 +1,6 @@
+rule all_smf_nanopore:
+    input:
+        expand(rules.mergebams.output, sample=unique_samples),
+        expand(rules.pycoqc_report.output, sample=unique_samples),
+        rules.reduce_all_samples_betascore.output,
+        expand(rules.betascore_reduce_all_samples.output, thres=all_thresholds, minflank=all_flanking_options)

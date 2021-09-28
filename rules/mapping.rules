@@ -23,9 +23,27 @@ if "mapping_filter_params" not in globals().keys():
 if "filter_chroms" not in globals().keys():
     filter_chroms = False
 
-filter_bams = mapping_filter_params != "" or filter_chroms
-if filter_chroms:
-    chrom_filter_string = " ".join(chroms)
+if "keep_unfiltered_bam" not in globals().keys():
+    keep_unfiltered_bam = False
+
+
+
+def alignment_script():
+    script = """
+    {minimap2} -t {params.slots} -a -x map-ont {reference} {input} --MD | {samtools} view -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
+    """
+    if mapping_filter_params != "" or filter_chroms:
+        chrom_filter_string = " ".join(chroms) if filter_chroms else ""
+        script += """
+        mv {output} {output}.unfiltered;
+        {samtools} index {output}.unfiltered;
+        {samtools} view {mapping_filter_params} {output}.unfiltered """+chrom_filter_string+""" -b > {output};
+        """
+        if not keep_unfiltered_bam:
+            script += """
+            rm {output}.unfiltered;
+            """
+    return script
 
 rule alignment:
     input: rules.fast5_to_fastq.output
@@ -36,13 +54,7 @@ rule alignment:
         memusage='32000',
         slots='8',
         misc=''
-    shell: '''
-           {minimap2} -t {params.slots} -a -x map-ont {reference} {input} --MD | {samtools} view -b | {samtools} sort -@ {params.slots} -T {output}.tmp -o {output};
-           ''' + (''' mv {output} {output}.unfiltered;
-           {samtools} index {output}.unfiltered;
-           {samtools} view {mapping_filter_params} {output}.unfiltered {chrom_filter_string} -b > {output};
-           rm {output}.unfiltered;
-           ''' if filter_bams else '')
+    shell: alignment_script()
 
 rule all_alignment:
     input: expand(rules.alignment.output, zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)

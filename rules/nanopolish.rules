@@ -147,7 +147,7 @@ rule merge_met_hdf5:
         slots='1',
         misc=''
     run:
-        with MetH5File(output[0], 'w', compression=None) as out_container:
+        with MetH5File(output[0], 'w', compression="gzip") as out_container:
             for tsv_file in input:
                 out_container.parse_and_add_nanopolish_file(tsv_file, include_chromosomes=chroms, postpone_sorting_until_close=True)
             out_container.create_chunk_index()
@@ -223,7 +223,8 @@ if "coords_file" in globals():
             bs_seq = load_pickled_bsseq(input.coords_file)
             print("Grouping")
             bs_chrom_grouped = bs_seq.groupby("chrom")
-            coords_bs_seq = {chrom: bs_chrom_grouped.get_group(chrom)["start"].values for chrom in chroms}
+            chrom_intersect = set(chroms).intersection(set(bs_chrom_grouped.groups.keys()))
+            coords_bs_seq = {chrom: bs_chrom_grouped.get_group(chrom)["start"].values for chrom in chrom_intersect}
             print("Reading all motif coordinates")
             all_coords = load_all_cggc_coords()
             print("Start counting")

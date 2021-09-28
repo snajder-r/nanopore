@@ -198,7 +198,13 @@ if "accessibility_model" in globals():
 else:
     print("accessibility_model not defined in config. Support for accessibility prediction disabled")
 
-include: 'rules.d/custom.rules'
+if "custom_rules" in globals().keys():
+    for f in Path("rules.d").iterdir():
+        if f.name.endswith(".rules"):
+            if f.name in custom_rules:
+                include: f
+
+
 
 '''
 ##############################################################################
@@ -228,6 +234,5 @@ rule report_methylation:
 
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
-
 
 localrules: prepare_mergebams, split_batches, split_batches_from_fastq

@@ -37,11 +37,38 @@ rule predict_accessibility:
         min_flank = lambda wildcards: wildcards["minflank"],
     shell: nanopolish_predict_script
 
+def merge_predict_accessibility_input(wildcards):
+    return expand(rules.predict_accessibility.output.prediction, sample=wildcards.sample, batch=samplebatches(wildcards.sample), minflank="{minflank}")
+
+all_flanking_options = [6,8,10]
+
+rule merge_predict_accessibility:
+    input: merge_predict_accessibility_input
+    output: Path(basedir).joinpath('nanopolish_accessibility', '{sample}_all_accessibility_calls_flank_{minflank}.tsv.bgz')
+    params: **default_smalljob_params, jobname="merge_acc"
+    shell: """
+           cat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n | {bgzip} > {output};
+           sleep 10; # napping because otherwise index file will be too new  
+           {tabix} -s 1 -b 3 -e 4  {output}
+           """
 
 
-#rule all_predict_accessibility:
-#    input: expand(rules.predict_accessibility.output.prediction, zip, sample=sbf.sb_samples, batch=sbf.sb_batches)
+rule all_merge_predict_accessibility:
+    input: expand(rules.merge_predict_accessibility.output, sample=unique_samples, minflank=all_flanking_options)
 
+
+rule merge_predict_accessibility_all_samples:
+    input: expand(rules.merge_predict_accessibility.output, sample=unique_samples, minflank="{minflank}")
+    output: Path(basedir).joinpath('nanopolish_accessibility', 'ALL_accessibility_calls_flank_{minflank}.tsv.bgz')
+    params: **default_smalljob_params, jobname="merge_acc"
+    shell: """
+           zcat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n |  {bgzip} > {output};
+           sleep 10; # napping because otherwise index file will be too new
+           {tabix} -s 1 -b 3 -e 4  {output}
+           """
+
+rule all_merge_predict_accessibility_all_samples:
+    input: expand(rules.merge_predict_accessibility_all_samples.output, minflank=all_flanking_options)
 
 rule accessibility_to_betascore_map:
     input:
@@ -51,7 +78,7 @@ rule accessibility_to_betascore_map:
         predict_accessibility_outdir().joinpath("sum_binarized_calls_thres_{thres}.tsv")
     params:
         **default_smalljob_params,
-        jobname="map_betasscore",
+        jobname="map_betasscore_{batch}",
     run:
         from nanopolish_smf.bsseq import load_pickled_bsseq
         from nanopolish_smf.annotation import load_all_cggc_coords
@@ -77,7 +104,7 @@ rule accessibility_to_betascore_map:
 #rule all_accessibility_to_betascore_map:
 #    input: expand(rules.accessibility_to_betascore_map.output, zip, sample=sbf.sb_samples, batch=sbf.sb_batches, thres="{thres}")
 
-all_flanking_options = [6,8,10]
+
 all_thresholds = ["1.0","1.5","2.0","2.5"]
 def accessibility_to_betascore_reduce_input(wildcards):
     return expand(rules.accessibility_to_betascore_map.output, sample="{sample}", batch=samplebatches(wildcards.sample), thres="{thres}", minflank="{minflank}")
@@ -94,6 +121,7 @@ def reduce_betascore_matrix(inputfiles, outputfile):
     df_out["met_rate"] = df_out["met"] / df_out["reads"]
     df_out["in_bs_seq"] = df_out["in_bs_seq"] > 0
     df_out.to_csv(outputfile,sep="\t",index=True)
+
 
 rule accessibility_to_betascore_reduce:
     input: accessibility_to_betascore_reduce_input
