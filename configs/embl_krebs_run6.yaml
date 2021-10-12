@@ -32,8 +32,13 @@ mettypes: [cpg,gpc]
 basecall_id: '001'
 keep_unfiltered_bam: True
 
-tabix: /g/easybuild/x86_64/CentOS/7/skylake/software/tabix/0.2.6-GCCcore-7.3.0/bin/tabix
-bgzip: /g/easybuild/x86_64/CentOS/7/skylake/software/tabix/0.2.6-GCCcore-7.3.0/bin/bgzip
+tabix_load_hook: module load tabix;
+nanopolish_timp_conversion_script: /g/krebs/group_folder/smf_nanopore/tools/timp/nanopolish_timp_conversion_script.py
+nanonome: /g/krebs/boulanger/Utilities/nanopolish_nanonome_timp_new_train/nanopolish
+
+llr_threshold_nanopolish: 2.0
+llr_threshold_nanonome: 2.0
+llr_threshold_accessibility: 2.0
 
 custom_rules:
   - project_smfnanopore.rules

@@ -1,0 +1,42 @@
+'''
+##############################################################################
+# Methylation calling using nanopolish
+##############################################################################
+'''
+
+'''
+In preparation for nanopolish methylation calling, raw fast5 entries
+for each read in the fastq files are indexed so they can be accessed more
+efficiently by nanopolish.
+
+The output files will be created within the fastq directory
+(with .index.readdb suffix for each fq file)
+'''
+
+
+'''
+Performs methylation calling using nanopolish for one sample and batch, for
+one type of methylation call (the "mtype" wildcard). The "mtype" wildcard
+could be one of "cpg", "gpc", or "dam".
+
+The output will be stored in the "met" directory in tsv format.
+'''
+rule nanonome:
+    input:
+        fq=rules.fast5_to_fastq.output,
+        bam=rules.alignment.output,
+        bai=f"{rules.alignment.output}.bai",
+        fqidx=rules.nanopolish_index.output
+    output: os.path.join(basedir, 'nanonome','{sample}','{batch}.tsv')
+    params:
+        jobname='nanonome_{sample}_{batch}',
+        runtime='16:00',
+        memusage='16000',
+        slots='8',
+        misc=''
+    shell: """
+    {nanonome} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q cpggpc > {output}
+    """
+
+rule all_nanonome:
+    input: expand(rules.nanonome.output, zip, sample=sbf.sb_samples, batch=sbf.sb_batches)

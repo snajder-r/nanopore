@@ -40,16 +40,17 @@ rule predict_accessibility:
 def merge_predict_accessibility_input(wildcards):
     return expand(rules.predict_accessibility.output.prediction, sample=wildcards.sample, batch=samplebatches(wildcards.sample), minflank="{minflank}")
 
-all_flanking_options = [6,8,10]
+all_flanking_options = [8]
 
 rule merge_predict_accessibility:
     input: merge_predict_accessibility_input
     output: Path(basedir).joinpath('nanopolish_accessibility', '{sample}_all_accessibility_calls_flank_{minflank}.tsv.bgz')
     params: **default_smalljob_params, jobname="merge_acc"
     shell: """
-           cat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n | {bgzip} > {output};
+           {tabix_load_hook}
+           cat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n | bgzip > {output};
            sleep 10; # napping because otherwise index file will be too new  
-           {tabix} -s 1 -b 3 -e 4  {output}
+           tabix -s 1 -b 3 -e 4  {output}
            """
 
 
@@ -62,9 +63,10 @@ rule merge_predict_accessibility_all_samples:
     output: Path(basedir).joinpath('nanopolish_accessibility', 'ALL_accessibility_calls_flank_{minflank}.tsv.bgz')
     params: **default_smalljob_params, jobname="merge_acc"
     shell: """
-           zcat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n |  {bgzip} > {output};
+           {tabix_load_hook}
+           zcat {input} | grep -v chromosome | sort -T {scratch_dir} -k1,1 -k3,3n |  bgzip > {output};
            sleep 10; # napping because otherwise index file will be too new
-           {tabix} -s 1 -b 3 -e 4  {output}
+           tabix -s 1 -b 3 -e 4  {output}
            """
 
 rule all_merge_predict_accessibility_all_samples:

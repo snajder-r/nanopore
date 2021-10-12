@@ -59,6 +59,7 @@ class SampleBatchesFilenames:
 print(basedir)
 sbf = SampleBatchesFilenames()
 
+print(sbf.sb_samples, sbf.sb_batches)
 def samplebatches(sample):
     return [sbf.sb_batches[i] for i in range(len(sbf.sb_batches)) if sbf.sb_samples[i] == sample]
 
@@ -189,6 +190,9 @@ include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'
 include: 'rules/sniffles.rules'
 include: 'rules/edgecase.rules'
+
+if "nanonome" in globals():
+    include: "rules/nanonome.rules"
 
 if "accessibility_model" in globals():
     include: 'rules/accessibility_prediction.rules'
