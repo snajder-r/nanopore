@@ -9,6 +9,9 @@ import pandas as pd
 for k in config.keys():
     globals()[k] = config[k]
 
+if "min_read_q" not in globals():
+    min_read_q = 0
+
 basecall_group = 'Basecall_1D_%s' % basecall_id
 if 'unique_samples' not in config.keys():
     unique_samples = os.listdir(os.path.join(basedir, 'raw'))

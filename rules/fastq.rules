@@ -1,3 +1,5 @@
+import numpy as np
+
 '''
 ##############################################################################
 # Extracting FASTQ from basecalled FAST5 files
@@ -26,6 +28,14 @@ def fast5_to_fastq_input(wildcards):
             if sbf.sbf_samples[i] == wildcards['sample'] and sbf.sbf_batches[i] == wildcards['batch']:
                 yield os.path.join(indir, '%s.fast5'%sbf.sbf_filenames[i])
 
+def compute_ont_mean_q_score(qstring):
+    """
+    Computing mean quality score as documented here:
+    https://labs.epi2me.io/quality-scores/
+    """
+    qvals = np.array([ord(q) for q in qstring.strip()]) - 33
+    return -10 * np.log10(np.sum(np.power(10,(-(qvals) / 10))) / len(qvals))
+
 rule fast5_to_fastq:
     input: fast5_to_fastq_input
     output: os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending)
@@ -38,20 +48,31 @@ rule fast5_to_fastq:
     run:
         fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
                         basecall_group=basecall_group)
+        passed = 0
+        failed = 0
+        crit = 0
         with open(output[0],'w') as of:
             for i in range(len(input)):
                 with h5py.File(input[i],'r') as f:
                     for read in f.keys():
                         try:
-                            fq = f[read][fastq_group][()].decode('utf8')
+                            fq = f[read][fastq_group][()].decode('ascii')
                             fq = fq.split('\n')
                             if read.startswith('read_'):
                                 read = read[5:]
                             fq[0] = f'@{read}'
-                            of.write('\n'.join(fq))
+                            mean_q = compute_ont_mean_q_score(fq[3])
+                            if mean_q >= min_read_q:
+                                of.write('\n'.join(fq))
+                                passed+=1
+                            else:
+                                failed+=1
                         except KeyError:
+                            import traceback
+                            print(traceback.format_exc())
                             print(f"Error retreiving {read}/{fastq_group}")
-
+                            crit +=1
+        print(f"{passed} passed, {failed} QC, {crit} critical error")
 
 checkpoint all_fast5_to_fastq:
     input: expand(rules.fast5_to_fastq.output, zip_combinator, sample=sbf.sbf_samples,  batch=sbf.sbf_batches)
