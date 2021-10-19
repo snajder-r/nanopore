@@ -5,7 +5,7 @@ default_sortjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'16', "m
 
 rule accessibility_to_timp_format:
     input: rules.predict_accessibility.output.prediction
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_{sample}_batch_{batch}_flank_{minflank}_thres_{llr_thres}.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_{sample}_batch_{batch}_flank_{minflank}_thres_{llr_thres}.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
@@ -35,7 +35,7 @@ rule all_merge_accessibility_timp_format:
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "np_metcalls_{sample}_batch_{batch}_mtype_{mtype}_thres_{llr_thres}.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_metcalls_{sample}_batch_{batch}_mtype_{mtype}_thres_{llr_thres}.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{mtype}"
@@ -64,12 +64,12 @@ rule all_merge_metcall_timp_format:
 
 rule nanonome_to_timp_format:
     input: rules.nanonome.output
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "nanonome_{sample}_batch_{batch}_thres_{llr_thres}.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "nanonome_{sample}_batch_{batch}_thres_{llr_thres}.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}"
     shell:
-        "{python} {nanopolish_timp_conversion_script} -c 2.0 -i {input} -q cpggpc -g {reference} > {output}"
+        "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q cpggpc -g {reference} > {output}"
 
 def merge_nanonome_timp_format_input(wildcards):
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
@@ -87,6 +87,9 @@ rule merge_nanonome_timp_format:
                sleep 10 # napping to make sure index is not too new
                tabix -p bed  {output}
             """
+
+rule all_merge_nanonome_timp_format:
+    input: expand(rules.merge_nanonome_timp_format.output, llr_thres=llr_threshold_nanonome)
 
 rule all_smf_timpformat:
     input:

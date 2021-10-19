@@ -1,7 +1,7 @@
 accessibility_model: /home/snajder/data/projects/tf_footprinting/nanopore_accessibility/trained_models/m5c_2021_08_01/r9.4_450bps.m5c.6mer.template.model
 threads: 32
 
-basedir: /g/krebs/group_folder/smf_nanopore/analysis/nanopore_runs/run7
+basedir: /g/krebs/group_folder/smf_nanopore/analysis/nanopore_runs/run8/emb6-8
 
 python: /home/snajder/miniconda3/envs/nanopore/bin/python
 reference: /home/snajder/data/projects/tf_footprinting/reference/dmel-all-chromosome-r6.29.fasta
@@ -31,6 +31,7 @@ gpu_params: '-p gpu --gres=gpu:1'
 mettypes: [cpg,gpc]
 basecall_id: '001'
 keep_unfiltered_bam: True
+min_read_q: 7
 
 tabix_load_hook: module load tabix;
 nanopolish_timp_conversion_script: /g/krebs/group_folder/smf_nanopore/tools/timp/nanopolish_timp_conversion_script.py
