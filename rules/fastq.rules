@@ -1,4 +1,5 @@
 import numpy as np
+from modusa.diskusage import check_free_space, compute_total_file_size_gb
 
 '''
 ##############################################################################
@@ -46,12 +47,16 @@ rule fast5_to_fastq:
         slots='1',
         misc=''
     run:
+        # Rudimentary disk space check. Output is estimated to be half of the input size,
+        # but we also want to multiply with 2 to be sure.. so this works
+        out_path = check_free_space(output[0], compute_total_file_size_gb(input))
+
         fastq_group='Analyses/{basecall_group}/BaseCalled_template/Fastq'.format(
                         basecall_group=basecall_group)
         passed = 0
         failed = 0
         crit = 0
-        with open(output[0],'w') as of:
+        with open(out_path,'w') as of:
             for i in range(len(input)):
                 with h5py.File(input[i],'r') as f:
                     for read in f.keys():

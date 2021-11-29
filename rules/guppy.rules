@@ -3,6 +3,7 @@ import sys
 import shutil
 import subprocess
 
+from modusa.diskusage import check_free_space, compute_total_file_size_gb
 
 if "use_gpu_for_guppy" not in globals().keys():
     use_gpu_for_guppy = True
@@ -12,6 +13,9 @@ if "scratch_dir" not in globals().keys():
 
 if "jobid_env_var" not in globals().keys():
     jobid_env_var="LSB_JOBID"
+
+if "guppy_model" not in globals().keys():
+    guppy_model = "dna_r9.4.1_450bps_modbases_5mc_hac.cfg"
 
 class GuppyWrapper:
     def __init__(self, guppy_dir, scratch_dir=None, batch_size=5, gpu=True, cpu_threads=1):
@@ -24,11 +28,11 @@ class GuppyWrapper:
     def run_guppy(self, indir, outdir):
         if self.gpu:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} --device auto " \
-                    "--config dna_r9.4.1_450bps_modbases_5mc_hac.cfg --gpu_runners_per_device 1 " \
+                    f"--config {guppy_model} --gpu_runners_per_device 1 " \
                     "--fast5_out".split(' ')
         else:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
-                    "--config dna_r9.4.1_450bps_modbases_dam-dcm-cpg_hac.cfg --num_callers {self.cpu_threads} " \
+                    f"--config {guppy_model} --num_callers {self.cpu_threads} " \
                     "--fast5_out".split(' ')
             print(guppy_command)
 
@@ -135,9 +139,20 @@ rule move_guppy_basecall_from_batchdir:
 
 def all_basecall_from_filelist_input(wc):
     for sample in unique_samples:
-        for f in os.listdir(os.path.join(basedir, "raw", sample, "original")):
-            if f.endswith("fast5"):
-                yield os.path.join(basedir, "raw", sample, "guppy", f)
+        original_dir = os.path.join(basedir, "raw", sample, "original")
+        if not os.path.isdir(original_dir):
+            continue
+        inpath = Path(basedir).joinpath("raw", sample, "original")
+        fast5s = [f for f in inpath.iterdir() if f.name.endswith("fast5")]
+        total_size = compute_total_file_size_gb(fast5s)
+
+        #Rudimentary check for free space. We need to make sure that there is enough space for all samples,
+        #but we also need to check for all samples because they might write to different mountpoints, depending
+        #on how symlinks are set
+        outdir = check_free_space(Path(basedir).joinpath("raw", sample, "guppy"), total_size * 4 * len(unique_samples))
+
+        for f in fast5s:
+            yield outdir.joinpath(f.name)
 
 rule all_basecall_from_filelist:
     input: all_basecall_from_filelist_input

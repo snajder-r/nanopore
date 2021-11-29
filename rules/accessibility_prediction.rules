@@ -6,6 +6,10 @@ default_prediction_params = {"jobname":'pred_nanopolish', "runtime":'24:00', "me
 default_smalljob_params = {"runtime":'4:00', "memusage":'16000', "slots":'2', "misc":''}
 default_largememjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'2', "misc":''}
 
+
+if "nanopolish_call_acc_options" not in globals().keys():
+    nanopolish_call_acc_options = ""
+
 nanopolish_predict_script = """
     mkdir -p {params.outdir}
     cp {input.model} {output.model}
@@ -13,7 +17,7 @@ nanopolish_predict_script = """
     # Sub-shell because nanopolish requires us to change directory
     (
         cd {params.outdir}
-        {nanopolish_acc} call-accessibility -t {params.slots} --min-flank {params.min_flank} --reads {input.fq} -m {output.model_fof} --bam {input.bam} --genome {reference} --methylation {params.alphabet} > {output.prediction}
+        {nanopolish_acc} call-accessibility -t {params.slots} {nanopolish_call_acc_options} --min-flank {params.min_flank} --reads {input.fq} -m {output.model_fof} --bam {input.bam} --genome {reference} --methylation {params.alphabet} > {output.prediction}
     )
     """
 
