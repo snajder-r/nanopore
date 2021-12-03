@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="embl">
+  <component name="PublishConfigData" autoUpload="Always" serverName="worker01">
     <serverData>
+      <paths name="ebi">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/nanopore" local="$PROJECT_DIR$" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="embl">
         <serverdata>
           <mappings>
@@ -17,5 +25,6 @@
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

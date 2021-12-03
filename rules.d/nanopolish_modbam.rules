@@ -1,0 +1,20 @@
+
+rule metcall_modbam:
+    input:
+        fq=rules.fast5_to_fastq.output,
+        bam=rules.alignment.output,
+        bai=f"{rules.alignment.output}.bai",
+        fqidx=rules.nanopolish_index.output
+    output: os.path.join(basedir, 'met_modbam','{sample}','{batch}_met_{mtype}.bam')
+    params:
+        jobname='metcall_{sample}_{batch}',
+        runtime='16:00',
+        memusage='16000',
+        slots='8',
+        misc=''
+    shell: """
+    {nanopolish_modbam} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} --modbam-output-name {output} > /dev/null
+    """
+
+rule all_metcall_modbam:
+    input: expand(rules.metcall_modbam.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)

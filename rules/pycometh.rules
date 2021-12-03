@@ -1,0 +1,27 @@
+from pathlib import Path
+from meth5.meth5 import MetH5File
+
+rule nanoepiseg:
+    input: rules.merge_met_hdf5.output
+    output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
+    params:
+        jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
+        runtime='4:00',
+        memusage='8000',
+        slots='12',
+        misc=""
+    shell: """{nanoepiseg} segment_h5 --m5file {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 10 --reader_workers 2"""
+
+
+def all_nanoepiseg_input(wc):
+    for sample in unique_samples:
+        for mettype in mettypes:
+            input_file = rules.merge_met_hdf5.output[0].format(sample=sample, mettype=mettype)
+            with MetH5File(input_file, "r") as f:
+                for chrom in chroms:
+                    if chrom in f.get_chromosomes():
+                        for chunk in range(f[chrom].get_number_of_chunks()):
+                            yield rules.nanoepiseg.output[0].format(sample=sample, mettype=mettype, chrom=chrom, chunk=chunk)
+
+rule all_nanoepiseg:
+    input: all_nanoepiseg_input

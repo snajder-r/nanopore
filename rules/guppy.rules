@@ -34,14 +34,12 @@ class GuppyWrapper:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
                     f"--config {guppy_model} --num_callers {self.cpu_threads} " \
                     "--fast5_out".split(' ')
-            print(guppy_command)
-
-
+        print(guppy_command)
         p = subprocess.Popen(guppy_command, stdout=subprocess.PIPE)
 
         for line in p.stdout:
             print('Guppy: ' + line.decode('UTF-8'))
-
+        print("Guppy done")
         p.wait()
 
     def run_guppy_batchwise_from_filelist(self, fast5files, outputdir):
@@ -56,25 +54,26 @@ class GuppyWrapper:
 
         batches = [fast5files[i:(i+self.batch_size)] for i in range(0,len(fast5files), self.batch_size)]
 
-        ssd_in=os.path.join(self.scratch_dir, LSB_JOBID, 'input')
-        ssd_out=os.path.join(self.scratch_dir, LSB_JOBID,'output')
+        ssd_dir = os.path.join(self.scratch_dir, LSB_JOBID)
+        ssd_in=os.path.join(ssd_dir, 'input')
+        ssd_out=os.path.join(ssd_dir ,'output')
 
         for batch_i in range(len(batches)):
             try:
                 print("Copying data to SSD (batch %d from %d)" % (batch_i, len(batches)))
                 os.makedirs(ssd_in, exist_ok=True)
                 os.makedirs(ssd_out, exist_ok=True)
-
                 batch = batches[batch_i]
 
                 for f in batch:
+                    print("Copying ", f)
                     shutil.copyfile(f, os.path.join(ssd_in,os.path.basename(f)))
-
                 self.run_guppy(ssd_in, ssd_out)
 
                 # The directory where guppy stores the basecalled fast5 files, since we
                 # are only really interested in those and not so much the fastq files
                 basecalled_fast5_dir = os.path.join(ssd_out, 'workspace')
+                print("Creating ", outputdir)
                 os.makedirs(outputdir, exist_ok=True)
                 print("Copying result to %s" % outputdir)
                 for f in os.listdir(basecalled_fast5_dir):
@@ -82,10 +81,7 @@ class GuppyWrapper:
 
                 print("Cleaning up %s" % ssd_out)
             finally:
-                pass
-                shutil.rmtree(ssd_out)
-                shutil.rmtree(ssd_in)
-
+                shutil.rmtree(ssd_dir)
 
     def run_guppy_batchwise(self, inputdir, outputdir):
         fast5files = [os.path.join(inputdir, f) for f in os.listdir(inputdir) if f.endswith('fast5')]
@@ -97,7 +93,7 @@ class GuppyWrapper:
 ##############################################################################
 '''
 
-num_batches = 8
+num_batches = 16
 
 def guppy_basecall_batches(wc):
     sample = wc["sample"]
@@ -119,6 +115,9 @@ checkpoint guppy_basecall_from_filelist:
     run:
         gw = GuppyWrapper(guppy_dir,scratch_dir=scratch_dir,batch_size=5,gpu=use_gpu_for_guppy,cpu_threads=int(params.slots))
         gw.run_guppy_batchwise_from_filelist(input, output[0])
+
+rule test2:
+    input: lambda wc: checkpoints.guppy_basecall_from_filelist.get(sample="HG003", batch="10").output
 
 def guppy_basecall_batches_map_back(wc):
     sample = wc["sample"]

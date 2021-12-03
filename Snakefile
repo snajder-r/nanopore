@@ -51,7 +51,6 @@ class SampleBatchesFilenames:
             self.sb_batches = [b for _,b in sbdict.values()]
             
         elif os.path.exists(os.path.join(basedir, 'fastq')):
-            print(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
             sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
             self.sb_samples = sb.sample
             self.sb_batches = sb.batch
@@ -59,10 +58,8 @@ class SampleBatchesFilenames:
             self.sbf_batches = None
             self.sbf_filenames = None
 
-print(basedir)
 sbf = SampleBatchesFilenames()
 
-print(sbf.sb_samples, sbf.sb_batches)
 def samplebatches(sample):
     return [sbf.sb_batches[i] for i in range(len(sbf.sb_batches)) if sbf.sb_samples[i] == sample]
 
@@ -202,7 +199,14 @@ if "accessibility_model" in globals():
 else:
     print("accessibility_model not defined in config. Support for accessibility prediction disabled")
 
+if "whatshap" in globals():
+    include: "rules/whatshap.rules"
+
+if "pycometh" in globals():
+    include: "rules/pycometh.rules"
+
 if "custom_rules" in globals().keys():
+    print(custom_rules)
     for f in Path("rules.d").iterdir():
         if f.name.endswith(".rules"):
             if f.name in custom_rules:
