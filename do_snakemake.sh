@@ -1,9 +1,9 @@
 #!/bin/bash
 
 if [[ -z "${SNAKEMAKE_PATH}" ]]; then
-  snakemake = "${SNAKEMAKE_PATH}"
+  snakemake="snakemake"
 else
-  snakemake = "snakemake"
+  snakemake="${SNAKEMAKE_PATH}"
 fi
 
 if [[ -z "${MEDUSA_CLUSTER_SCRIPT}" ]]; then
