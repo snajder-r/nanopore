@@ -1,5 +1,9 @@
 from nanopolish_smf.timp_format import Converter
 
+"""
+Dependecies: Need to install 
+"""
+
 default_smalljob_params = {"runtime":'1:00', "memusage":'4000', "slots":'1', "misc":''}
 default_sortjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'16', "misc":''}
 
@@ -101,8 +105,6 @@ rule all_smf_nanopore:
     input:
         expand(rules.mergebams.output, sample=unique_samples),
         expand(rules.pycoqc_report.output, sample=unique_samples),
-        rules.reduce_all_samples_betascore.output,
         expand(rules.merge_nanonome_timp_format.output,llr_thres=llr_threshold_nanonome),
         expand(rules.merge_metcall_timp_format.output,mtype=["cpg", "gpc"],llr_thres=llr_threshold_nanopolish),
         expand(rules.merge_accessibility_timp_format.output,minflank=all_flanking_options,llr_thres=llr_threshold_accessibility),
-        expand(rules.betascore_reduce_all_samples.output, thres=all_thresholds, minflank=all_flanking_options)

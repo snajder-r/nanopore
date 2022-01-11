@@ -1,5 +1,11 @@
 #!/bin/bash
 
+if [[ -z "${SNAKEMAKE_PATH}" ]]; then
+  snakemake = "${SNAKEMAKE_PATH}"
+else
+  snakemake = "snakemake"
+fi
+
 if [[ -z "${MEDUSA_CLUSTER_SCRIPT}" ]]; then
   echo "Please set environment variable MEDUSA_CLUSTER_SCRIPT." >&2;
   exit 1
@@ -19,5 +25,5 @@ if [[ -z "${HDF5_PLUGIN_PATH}" ]]; then
   exit 1
 fi
 
-snakemake --cluster "${cluster_script}" ${cluster_status_script} --jobs 128 --latency-wait 120 $@
+${snakemake} --cluster "${cluster_script}" ${cluster_status_script} --jobs 128 --latency-wait 120 $@
 

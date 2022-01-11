@@ -116,9 +116,6 @@ checkpoint guppy_basecall_from_filelist:
         gw = GuppyWrapper(guppy_dir,scratch_dir=scratch_dir,batch_size=5,gpu=use_gpu_for_guppy,cpu_threads=int(params.slots))
         gw.run_guppy_batchwise_from_filelist(input, output[0])
 
-rule test2:
-    input: lambda wc: checkpoints.guppy_basecall_from_filelist.get(sample="HG003", batch="10").output
-
 def guppy_basecall_batches_map_back(wc):
     sample = wc["sample"]
     filename = wc["filename"]
@@ -153,7 +150,7 @@ def all_basecall_from_filelist_input(wc):
         for f in fast5s:
             yield outdir.joinpath(f.name)
 
-rule all_basecall_from_filelist:
+rule all_basecall:
     input: all_basecall_from_filelist_input
 
 localrules: move_guppy_basecall_from_batchdir
