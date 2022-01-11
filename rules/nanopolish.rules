@@ -85,6 +85,50 @@ rule metcall:
 rule all_metcall:
     input: expand(rules.metcall.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
 
+
+rule eventalign:
+    input:
+        fq=rules.fast5_to_fastq.output,
+        bam=rules.alignment.output,
+        bai=f"{rules.alignment.output}.bai",
+        fqidx=rules.nanopolish_index.output
+    output: os.path.join(basedir, 'eventalign','{sample}','{batch}.tsv')
+    params:
+        jobname='eventalign_{sample}_{batch}',
+        runtime='16:00',
+        memusage='16000',
+        slots='8',
+        misc=''
+    shell: """
+    {nanopolish} eventalign -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} > {output} 
+    """
+
+
+rule all_eventalign:
+    input: expand(rules.eventalign.output, zip, sample=sbf.sb_samples, batch=sbf.sb_batches)
+
+
+
+rule kmer_signal:
+    input:
+        eventalign=temp(rules.eventalign.output),
+    output: os.path.join(basedir, 'kmer_signal','{sample}','{batch}.tsv')
+    params:
+        jobname='eventalign_{sample}_{batch}',
+        runtime='2:00',
+        memusage='8000',
+        slots='1',
+        misc=''
+    shell: """
+    head -1 {input} > {output}
+    cat {input} | grep -v reference | cut -f 3,7  | sort >> {output} 
+    """
+
+
+rule all_kmer_signal:
+    input: expand(rules.kmer_signal.output, zip, sample=sbf.sb_samples, batch=sbf.sb_batches)
+
+
 '''
 This merges the nanopolish methylation calls, loads it into a pandas dataframe
 and stores it in pickled format.

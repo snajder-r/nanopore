@@ -8,10 +8,20 @@ rule nanoepiseg:
         jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
         runtime='4:00',
         memusage='8000',
-        slots='12',
+        slots='4',
         misc=""
-    shell: """{nanoepiseg} segment_h5 --m5file {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 10 --reader_workers 2"""
+    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 2 --reader_workers 2 --max_segments_per_window 10"""
 
+rule nanoepiseg_bed:
+    input: rules.nanoepiseg.output
+    output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.bed")
+    params:
+        jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
+        runtime='4:00',
+        memusage='8000',
+        slots='1',
+        misc=""
+    shell: """cut -f 1,2,3 {input} | grep -v "chrom" > {output}"""
 
 def all_nanoepiseg_input(wc):
     for sample in unique_samples:
@@ -25,3 +35,66 @@ def all_nanoepiseg_input(wc):
 
 rule all_nanoepiseg:
     input: all_nanoepiseg_input
+
+rule pycometh_asm:
+    input: hdf5 = rules.merge_met_hdf5.output,
+           segments = rules.nanoepiseg_bed.output
+    output: Path(basedir).joinpath("asm/{sample}/pycometh_metcomp_chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
+    params:
+        jobname='pycometh_{sample}_{mettype}_{chrom}_{chunk}',
+        runtime='4:00',
+        memusage='8000',
+        slots='12',
+        misc=""
+    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} -r haplotype --sample_id_list H1 H2 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+
+def pycometh_asm_input(wc):
+    for mettype in mettypes:
+        input_file = rules.merge_met_hdf5.output[0].format(sample=wc["sample"], mettype=mettype)
+        with MetH5File(input_file, "r") as f:
+            for chrom in chroms:
+                if chrom in f.get_chromosomes():
+                    for chunk in range(f[chrom].get_number_of_chunks()):
+                        yield rules.pycometh_asm.output[0].format(sample=wc["sample"], mettype=mettype, chrom=chrom, chunk=chunk)
+
+pycometh_merge_script = """
+head -1 {input[0]} > {output};
+grep -hv "chrom" {input} | sort -k1,1 -k2,2n -k3,3n --parallel={params.slots} >> {output}
+"""
+
+rule pycometh_merge_adjust:
+    input: Path(basedir).joinpath("{subdir}/met_comp_merged_{sample}.bed")
+    output: Path(basedir).joinpath("{subdir}/met_comp_adj_{sample}.bed")
+    params:
+        jobname = 'adj_pval', runtime = '01:00', memusage = '16000', slots = '1', misc = ''
+    run:
+        import pandas as pd
+        import numpy as np
+        from nanoepitools.math import fdr_from_pvals
+
+        df = pd.read_csv(input[0],sep="\t")
+        pvals = np.array(df["pvalue"])
+        weights = np.array(df["ihw_weight"])
+        idx = ~np.isnan(pvals)
+        pvals = pvals[idx]
+        weights = weights[idx]
+        weights = (weights - np.mean(weights)) * 2 - 1
+        pvals = pvals / weights
+        fdr = fdr_from_pvals(pvals)
+        df.loc[idx, "adj_pvalue"] = fdr
+        df.to_csv(output[0],sep="\t",index=False)
+
+
+rule pycometh_merge_asm:
+    input: pycometh_asm_input
+    output: Path(basedir).joinpath("asm/met_comp_merged_{sample}.bed")
+    params:
+        jobname='merge',
+        runtime='01:00',
+        memusage='8000',
+        slots='16',
+        misc=''
+    shell: pycometh_merge_script
+
+rule all_pycometh_merge_adjust:
+    input: expand(rules.pycometh_merge_adjust.output, subdir="asm", sample="HG003")

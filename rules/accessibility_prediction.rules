@@ -1,6 +1,6 @@
 from pathlib import Path
 
-default_prediction_params = {"jobname":'pred_nanopolish', "runtime":'24:00', "memusage":'16000',
+default_prediction_params = {"jobname":'pred_nanopolish_{sample}_{batch}', "runtime":'24:00', "memusage":'16000',
         "slots":'8', "misc":'', "alphabet": "m5c"}
 
 default_smalljob_params = {"runtime":'4:00', "memusage":'16000', "slots":'2', "misc":''}
