@@ -4,11 +4,11 @@ rule nanoepiseg_parents:
     output: Path(basedir).joinpath("segmentation_parents/chr_{chrom}_chunk_{chunk}_segmented_cpg.tsv")
     params:
         jobname='nanoepiseg_parents_{chrom}_{chunk}',
-        runtime='4:00',
+        runtime='12:00',
         memusage='16000',
         slots='16',
         misc=""
-    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 14 --reader_workers 2 --max_segments_per_window 8"""
+    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 14 --reader_workers 2 --max_segments_per_window 20"""
 
 def all_nanoepiseg_parents_input(wc):
     sample = "HG003"
@@ -32,7 +32,7 @@ rule nanoepiseg_parents_bed:
         memusage='8000',
         slots='1',
         misc=""
-    shell: """cut -f 1,2,3 {input} | grep -v "chrom" > {output}"""
+    shell: """cut -f 1,2,3 {input} | grep -v "chrom" | sort -k1,1 -k2,2n | uniq  > {output}"""
 
 rule pycometh_parents:
     input: hdf5 = expand(rules.merge_met_hdf5.output, sample=["HG003", "HG004"], mettype="{mettype}"),

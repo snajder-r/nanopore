@@ -6,22 +6,22 @@ rule nanoepiseg:
     output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
     params:
         jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
-        runtime='4:00',
+        runtime='8:00',
         memusage='8000',
-        slots='4',
+        slots='6',
         misc=""
-    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 2 --reader_workers 2 --max_segments_per_window 10"""
+    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 4 --reader_workers 2 --max_segments_per_window 20"""
 
 rule nanoepiseg_bed:
     input: rules.nanoepiseg.output
     output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.bed")
     params:
         jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
-        runtime='4:00',
+        runtime='0:30',
         memusage='8000',
         slots='1',
         misc=""
-    shell: """cut -f 1,2,3 {input} | grep -v "chrom" > {output}"""
+    shell: """cut -f 1,2,3 {input} | grep -v "chrom" | sort -k1,1 -k2,2n | uniq > {output}"""
 
 def all_nanoepiseg_input(wc):
     for sample in unique_samples:
@@ -79,7 +79,7 @@ rule pycometh_merge_adjust:
         pvals = pvals[idx]
         weights = weights[idx]
         weights = (weights - np.mean(weights)) * 2 - 1
-        pvals = pvals / weights
+        #pvals = pvals / weights
         fdr = fdr_from_pvals(pvals)
         df.loc[idx, "adj_pvalue"] = fdr
         df.to_csv(output[0],sep="\t",index=False)
