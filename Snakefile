@@ -194,6 +194,9 @@ include: 'rules/edgecase.rules'
 if "nanonome" in globals():
     include: "rules/nanonome.rules"
 
+if "bonito" in globals():
+    include: "rules/bonito.rules"
+
 if "accessibility_model" in globals():
     include: 'rules/accessibility_prediction.rules'
 else:

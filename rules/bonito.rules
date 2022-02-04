@@ -1,0 +1,36 @@
+import os
+import sys
+import shutil
+from pathlib import Path
+import subprocess
+
+from modusa.diskusage import check_free_space, compute_total_file_size_gb
+
+if "scratch_dir" not in globals().keys():
+    scratch_dir=os.path.join(basedir,'tmp')
+
+if "jobid_env_var" not in globals().keys():
+    jobid_env_var="LSB_JOBID"
+
+rule bonito_basecall_metcall:
+    input: Path(basedir).joinpath("raw", "{sample}", "batched", "{batch}")
+    output: sorted = Path(basedir).joinpath("remora", "{sample}", "{batch}.sorted.bam"),
+            unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam"))
+    params:
+        jobname='bonito_{sample}_{batch}',
+        runtime='02:00',
+        memusage='8000',
+        slots='8',
+        misc = gpu_params,
+    shell:
+        """
+        {cuda_load_hook} && 
+        {bonito} basecaller {bonito_model} --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
+        {samtools} sort {output.unsorted} > {output.sorted} 
+        """
+
+
+
+rule all_bonito_basecall_metcall:
+    input: expand(rules.bonito_basecall_metcall.output.sorted, zip, sample=sbf.sbf_samples,  batch=sbf.sbf_batches),
+           expand(rules.bonito_basecall_metcall.output.sorted+".bai", zip, sample=sbf.sbf_samples, batch=sbf.sbf_batches),

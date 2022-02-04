@@ -1,5 +1,3 @@
-from nanopolish_smf.timp_format import Converter
-
 """
 Dependecies: Need to install 
 """
@@ -14,6 +12,8 @@ rule accessibility_to_timp_format:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
     run:
+        from nanopolish_smf.timp_format import Converter
+        from nanopolish_smf.accessibility import AccessibilityEntry
         with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), flank=2) as conv:
             conv.convert_file(str(input), str(output))
 
@@ -94,6 +94,71 @@ rule merge_nanonome_timp_format:
 
 rule all_merge_nanonome_timp_format:
     input: expand(rules.merge_nanonome_timp_format.output, llr_thres=llr_threshold_nanonome)
+
+
+rule bonito_timp_format:
+    input: rules.bonito_basecall_metcall.output.sorted
+    output: Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_{sample}_batch_{batch}_mtype_thres_{llr_thres}.tsv")
+    params:
+        **default_smalljob_params,
+        jobname="convert_bonito_timp_format_{sample}_{batch}"
+    run:
+        from modbampy import ModBam
+        import numpy as np
+        from nanopolish_smf.timp_format import Converter
+        from nanopolish_smf.accessibility import AccessibilityEntry
+
+        def p_to_llr(p, prior=0.5):
+            """
+            Converts the posterior probability p(a|x) into a log-likelihood ratio
+            log(p(x|a)/p(x|~a)) given a prior pa(a)
+            """
+            return -np.log(prior * (1 - p) / (p * (1 - prior)))
+
+        with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs={"CG"}) as converter, open(output[0], "wt") as out_f:
+            for chrom in converter.ref.keys():
+                for read in ModBam(input[0],chrom,0,len(converter.ref[chrom])).reads():
+                    llrs = np.zeros((read.reference_end - read.reference_start))
+                    for pos_mod in read.mod_sites:
+                        rpos = pos_mod.rpos
+                        if rpos < 0:
+                            continue
+                        if read.is_reverse:
+                            rpos -= 1  # otherwise it points at the G
+                        p = float(pos_mod.qual) / 256
+                        llrs[rpos - read.reference_start] = p_to_llr(np.clip(p, 0.000001, 0.999999))
+
+                    read_entry = AccessibilityEntry(chrom,read.reference_start,read.reference_end,
+                        True,read.query_name,llrs)
+
+                    timp_line = converter.format_line(converter.convert_line(read_entry))
+                    if timp_line is None:
+                        continue
+                    out_f.write(f"{timp_line}\n")
+
+
+def merge_bonito_timp_format_input(wildcards):
+    for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
+        yield rules.bonito_timp_format.output[0].format(sample=sample, batch=batch, llr_thres=wildcards["llr_thres"])
+
+
+rule merge_bonito_timp_format:
+    input: merge_bonito_timp_format_input
+    output: Path(basedir).joinpath('calls_timp_format', "bonito_thres_{llr_thres}.tsv.bgz")
+    params:
+        **default_sortjob_params,
+        jobname = "merge_timp_format_bonito"
+    shell: """
+               {tabix_load_hook}
+               cat {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
+               sleep 10 # napping to make sure index is not too new
+               tabix -p bed  {output}
+            """
+
+rule all_merge_bonito_timp_format:
+    input: expand(rules.merge_bonito_timp_format.output, llr_thres="2.0")
+
+
 
 rule all_smf_timpformat:
     input:
