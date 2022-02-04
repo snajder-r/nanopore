@@ -18,3 +18,30 @@ rule metcall_modbam:
 
 rule all_metcall_modbam:
     input: expand(rules.metcall_modbam.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
+
+
+def prepare_mergemodbams_input(wildcards):
+    return expand(rules.metcall_modbam.output, sample=wildcards.sample, mtype=wildcards.mtype, batch=samplebatches(wildcards.sample))
+
+rule prepare_mergemodbams:
+    input: prepare_mergemodbams_input
+    output: os.path.join(basedir, 'met_modbam/{sample}_{mtype}.bam.filelist.txt')
+    shell: 'echo {input} | sed \'s/ /\\n/g\' > {output}'
+
+rule mergemodbams:
+    input: rules.prepare_mergemodbams.output
+    output: os.path.join(basedir, 'met_modbam/{sample}_{mtype}.sorted.bam')
+    params:
+        jobname='mergemodbam_{sample}_{mtype}',
+        runtime='24:00',
+        memusage='64000',
+        slots='1',
+        misc=''
+    shell: '''
+           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} | {samtools} sort -T {output}.tmp -o {output}
+           '''
+
+rule all_mergemodbams:
+    input: expand(rules.mergemodbams.output, sample=unique_samples, mtype=mettypes)
+
+localrules: prepare_mergemodbams
