@@ -190,3 +190,24 @@ rule pycometh_parents_diff_methylkit:
         runtime = '4:00',
         memusage = '8000', slots = '12', misc = ""
     shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+
+
+
+
+############
+# BENCHMARKING SEGMENTATION CONSISTENCY
+############
+
+rule nanoepiseg_subsetted:
+    input: Path(basedir).joinpath("subset_m5/HG003_cpg.h5")
+    output: Path(basedir).joinpath("subset_m5/segmentation/subset_{i}_segmented_cpg.tsv")
+    params:
+        jobname = 'nanoepiseg_subset_{i}',
+        runtime = '24:00',
+        memusage = '16000',
+        slots = '16',
+        misc = ""
+    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome 21_{wildcards.i} --read_groups_keys haplotype --out_tsv {output} --workers 14 --reader_workers 2 --max_segments_per_window 20"""
+
+rule all_nanoepiseg_subsetted:
+    input: expand(rules.nanoepiseg_subsetted.output, i=range(100))
