@@ -12,10 +12,30 @@ if "scratch_dir" not in globals().keys():
 if "jobid_env_var" not in globals().keys():
     jobid_env_var="LSB_JOBID"
 
+if "mapping_filter_params" not in globals().keys():
+    mapping_filter_params = ""
+
+if "filter_chroms" not in globals().keys():
+    filter_chroms = False
+
+if "keep_unfiltered_bam" not in globals().keys():
+    keep_unfiltered_bam = False
+
+def bonito_filter_script():
+    if mapping_filter_params != "" or filter_chroms:
+        chrom_filter_string = " ".join(chroms) if filter_chroms else ""
+        return """
+            {samtools} index {output.unfiltered}
+            {samtools} view {mapping_filter_params} {output.unfiltered} """ + chrom_filter_string + """ -b > {output.sorted};
+            """
+    else:
+        return "mv  {output.unfiltered} {output.sorted}"
+
 rule bonito_basecall_metcall:
     input: Path(basedir).joinpath("raw", "{sample}", "batched", "{batch}")
     output: sorted = Path(basedir).joinpath("remora", "{sample}", "{batch}.sorted.bam"),
-            unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam"))
+            unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam")),
+            unfiltered= temp(Path(basedir).joinpath("remora","{sample}","{batch}.unfiltered.bam"))
     params:
         jobname='bonito_{sample}_{batch}',
         runtime='02:00',
@@ -24,10 +44,10 @@ rule bonito_basecall_metcall:
         misc = gpu_params,
     shell:
         """
-        {cuda_load_hook} && 
-        {bonito} basecaller {bonito_model} --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
-        {samtools} sort {output.unsorted} > {output.sorted} 
-        """
+        {cuda_load_hook} 
+        {bonito} basecaller {bonito_model} --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted}
+        {samtools} sort {output.unsorted} > {output.unfiltered}
+        """ + bonito_filter_script()
 
 
 
