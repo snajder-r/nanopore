@@ -2,7 +2,7 @@
 <project version="4">
   <component name="SshConfigs">
     <configs>
-      <sshConfig authType="OPEN_SSH" connectionConfig="{&quot;serverAliveInterval&quot;:300}" host="embl" id="88a0222b-f5a5-495e-8749-9ecbe4f8c50d" port="22" nameFormat="DESCRIPTIVE" username="snajder" />
+      <sshConfig authType="OPEN_SSH" connectionConfig="{&quot;serverAliveInterval&quot;:300}" host="login.cluster.embl.de" id="88a0222b-f5a5-495e-8749-9ecbe4f8c50d" port="22" nameFormat="DESCRIPTIVE" username="snajder" />
     </configs>
   </component>
 </project>

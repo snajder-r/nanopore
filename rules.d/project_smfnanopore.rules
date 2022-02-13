@@ -97,7 +97,8 @@ rule all_merge_nanonome_timp_format:
 
 
 rule bonito_timp_format:
-    input: rules.bonito_basecall_metcall.output.sorted
+    input: bam=rules.bonito_basecall_metcall.output.sorted,
+           bai=rules.bonito_basecall_metcall.output.sorted + ".bai"
     output: Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_{sample}_batch_{batch}_mtype_thres_{llr_thres}.tsv")
     params:
         **default_smalljob_params,
@@ -117,7 +118,7 @@ rule bonito_timp_format:
 
         with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs={"CG"}) as converter, open(output[0], "wt") as out_f:
             for chrom in converter.ref.keys():
-                for read in ModBam(input[0],chrom,0,len(converter.ref[chrom])).reads():
+                for read in ModBam(input.bam,chrom,0,len(converter.ref[chrom])).reads():
                     llrs = np.zeros((read.reference_end - read.reference_start))
                     for pos_mod in read.mod_sites:
                         rpos = pos_mod.rpos
@@ -165,6 +166,7 @@ rule all_smf_timpformat:
         expand(rules.merge_nanonome_timp_format.output,llr_thres=llr_threshold_nanonome),
         expand(rules.merge_metcall_timp_format.output, mtype=["cpg", "gpc"], llr_thres=llr_threshold_nanopolish),
         expand(rules.merge_accessibility_timp_format.output, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
+        expand(rules.merge_bonito_timp_format.output, llr_thres=llr_threshold_accessibility),
 
 rule all_smf_nanopore:
     input:
@@ -173,3 +175,4 @@ rule all_smf_nanopore:
         expand(rules.merge_nanonome_timp_format.output,llr_thres=llr_threshold_nanonome),
         expand(rules.merge_metcall_timp_format.output,mtype=["cpg", "gpc"],llr_thres=llr_threshold_nanopolish),
         expand(rules.merge_accessibility_timp_format.output,minflank=all_flanking_options,llr_thres=llr_threshold_accessibility),
+        expand(rules.merge_bonito_timp_format.output, llr_thres=llr_threshold_accessibility),

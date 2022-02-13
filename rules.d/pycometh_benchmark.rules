@@ -37,14 +37,14 @@ rule nanoepiseg_parents_bed:
 rule pycometh_parents:
     input: hdf5 = expand(rules.merge_met_hdf5.output, sample=["HG003", "HG004"], mettype="{mettype}"),
            segments = rules.nanoepiseg_parents_bed.output
-    output: Path(basedir).joinpath("diffmet_parents/pycometh_metcomp_chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
+    output: Path(basedir).joinpath("diffmet_parents_{hypothesis}/pycometh_metcomp_chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
     params:
         jobname='pycometh_{mettype}_{chrom}_{chunk}',
         runtime='4:00',
         memusage='8000',
         slots='12',
         misc=""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis {wildcards.hypothesis} --do_independent_hypothesis_weighting"""
 
 def all_pycometh_parents_input(wc):
     for mettype in mettypes:
@@ -53,11 +53,11 @@ def all_pycometh_parents_input(wc):
             for chrom in chroms:
                 if chrom in f.get_chromosomes():
                     for chunk in range(f[chrom].get_number_of_chunks()):
-                        yield rules.pycometh_parents.output[0].format(mettype=mettype, chrom=chrom, chunk=chunk)
+                        yield rules.pycometh_parents.output[0].format(mettype=mettype, chrom=chrom, chunk=chunk, hypothesis=wc["hypothesis"])
 
 rule merge_pycometh_parents:
     input: all_pycometh_parents_input
-    output: Path(basedir).joinpath("diffmet_parents/met_comp_merged_parents.bed")
+    output: Path(basedir).joinpath("diffmet_parents_{hypothesis}/met_comp_merged_parents.bed")
     params:
         jobname='merge',
         runtime='01:00',
@@ -67,8 +67,23 @@ rule merge_pycometh_parents:
     shell: pycometh_merge_script
 
 rule merge_pycometh_parents_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="diffmet_parents", sample="parents")
+    input: expand(rules.pycometh_merge_adjust.output, subdir="diffmet_parents_{hypothesis}", sample="parents")
 
+rule pycometh_parents_report:
+    input: expand(rules.pycometh_merge_adjust.output, subdir="diffmet_parents_{hypothesis}", sample="parents")
+    output: "diffmet_parents_{hypothesis}/reports/pycoMeth_summary_report.html"
+    params:
+        jobname = 'report',
+        runtime = '02:00',
+        memusage = '8000',
+        slots = '2',
+        misc = ''
+    shell: """
+           {pycometh} Comp_Report -i met_merged/HG003_cpg.h5 met_merged/HG004_cpg.h5 -f {reference} --sample_id_list HG003 HG004 -g {gff} -o diffmet_parents_{wildcards.hypothesis}/reports/ -c {input} --min_diff_bs 0.5
+           """
+
+rule all_pycometh_parents_report:
+    input: expand(rules.pycometh_parents_report.output, hypothesis=["llr_diff", "bs_diff"])
 
 ############
 # ASM FROM haplotype informed fastseg segmentation
@@ -107,6 +122,7 @@ rule pycometh_merge_asm_fastseg:
 
 rule all_pycometh_fastseg_merge_adjust:
     input: expand(rules.pycometh_merge_adjust.output, subdir="asm_fastseg", sample="HG003")
+
 
 ############
 # ASM FROM methylkit (no haplotype information)

@@ -96,5 +96,17 @@ rule pycometh_merge_asm:
         misc=''
     shell: pycometh_merge_script
 
+
+rule pycometh_asm_report:
+    input: expand(rules.pycometh_merge_adjust.output, subdir="asm", sample=unique_samples)
+    params:
+        jobname = 'report',
+        runtime = '02:00',
+        memusage = '8000',
+        slots = '2',
+        misc = ''
+    shell: """{pycometh} Comp_Report -i met_merged/{wildcartds.sample}_cpg.h5 -f {reference} --sample_id_list H1 H2 -g {gff} -o asm/reports/ -c {input} --min_diff_bs 0.5"""
+
+
 rule all_pycometh_merge_adjust:
     input: expand(rules.pycometh_merge_adjust.output, subdir="asm", sample="HG003")

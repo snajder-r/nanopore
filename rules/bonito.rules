@@ -27,6 +27,7 @@ def bonito_filter_script():
         return """
             {samtools} index {output.unfiltered}
             {samtools} view {mapping_filter_params} {output.unfiltered} """ + chrom_filter_string + """ -b > {output.sorted};
+            rm {output.unfiltered}.bai
             """
     else:
         return "mv  {output.unfiltered} {output.sorted}"
@@ -49,7 +50,8 @@ rule bonito_basecall_metcall:
         {samtools} sort {output.unsorted} > {output.unfiltered}
         """ + bonito_filter_script()
 
-
+rule testbonito:
+    input: expand(rules.bonito_basecall_metcall.output.sorted, sample=sbf.sbf_samples[0], batch=sbf.sbf_batches[0])
 
 rule all_bonito_basecall_metcall:
     input: expand(rules.bonito_basecall_metcall.output.sorted, zip, sample=sbf.sbf_samples,  batch=sbf.sbf_batches),

@@ -5,7 +5,7 @@ rule metcall_modbam:
         bam=rules.alignment.output,
         bai=f"{rules.alignment.output}.bai",
         fqidx=rules.nanopolish_index.output
-    output: os.path.join(basedir, 'met_modbam','{sample}','{batch}_met_{mtype}.bam')
+    output: os.path.join(basedir, 'met_modbam','{sample}','{batch}_met_{mtype}.unsorted.bam')
     params:
         jobname='metcall_{sample}_{batch}',
         runtime='16:00',
@@ -13,15 +13,30 @@ rule metcall_modbam:
         slots='8',
         misc=''
     shell: """
-    {nanopolish_modbam} call-methylation -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} --modbam-output-name {output} > /dev/null
+    {nanopolish_modbam} call-methylation --modbam-style reference -t {params.slots} -g {reference} -b {input.bam} -r {input.fq} -q {wildcards.mtype} --modbam-output-name {output} > /dev/null
     """
 
+rule modbam_sort:
+    input: os.path.join(basedir, 'met_modbam','{sample}','{batch}_met_{mtype}.unsorted.bam')
+    output: os.path.join(basedir, 'met_modbam','{sample}','{batch}_met_{mtype}.sorted.bam')
+    params:
+        jobname='bamsort_{sample}_{batch}',
+        runtime='1:00',
+        memusage='16000',
+        slots='8',
+        misc=''
+    shell:
+        """
+        {samtools} sort -@ {params.slots} -T  {output}.tmp -o {output} {input}
+        """
+
+
 rule all_metcall_modbam:
-    input: expand(rules.metcall_modbam.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
+    input: expand(rules.modbam_sort.output, zip2_comb3_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches, mtype=mettypes)
 
 
 def prepare_mergemodbams_input(wildcards):
-    return expand(rules.metcall_modbam.output, sample=wildcards.sample, mtype=wildcards.mtype, batch=samplebatches(wildcards.sample))
+    return expand(rules.modbam_sort.output, sample=wildcards.sample, mtype=wildcards.mtype, batch=samplebatches(wildcards.sample))
 
 rule prepare_mergemodbams:
     input: prepare_mergemodbams_input
@@ -30,7 +45,7 @@ rule prepare_mergemodbams:
 
 rule mergemodbams:
     input: rules.prepare_mergemodbams.output
-    output: os.path.join(basedir, 'met_modbam/{sample}_{mtype}.sorted.bam')
+    output: os.path.join(basedir, 'met_modbam/{sample}_{mtype}.merged.bam')
     params:
         jobname='mergemodbam_{sample}_{mtype}',
         runtime='24:00',
@@ -38,7 +53,8 @@ rule mergemodbams:
         slots='1',
         misc=''
     shell: '''
-           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} | {samtools} sort -T {output}.tmp -o {output}
+           {samtools} merge -b {input} - > {output};
+           {samtools} index {output}
            '''
 
 rule all_mergemodbams:
