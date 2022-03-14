@@ -123,7 +123,7 @@ def merge_timp_format_read_stats_input(wildcards):
 
 rule merge_timp_format_read_stats:
     input: merge_timp_format_read_stats_input
-    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_stats.tsv")
+    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_stats.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format_read_stats"
