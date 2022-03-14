@@ -102,7 +102,7 @@ def merge_timp_format_input(wildcards):
 
 rule merge_timp_format:
     input: merge_timp_format_input
-    output: Path(basedir).joinpath('calls_timp_format', "{source}.tsv.bgz")
+    output: Path(basedir).joinpath('calls_timp_format', "{source}_calls.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format"
