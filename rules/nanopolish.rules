@@ -17,7 +17,13 @@ The output files will be created within the fastq directory
 (with .index.readdb suffix for each fq file) 
 '''
 
+
+
 def nanopore_summary_file(wildcards):
+    # FIXME this could help speed nanopolish index up but first requires fixes to the summary generation from pycoQC so it writes the filename
+    # For now i will disable it
+    return ""
+
     filename = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy_summary.txt')
     if os.path.exists(filename):
         return f'-s {filename}'
