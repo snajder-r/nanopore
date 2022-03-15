@@ -165,7 +165,7 @@ rule all_smf_timpformat:
 rule all_smf_nanopore:
     input:
         expand(rules.mergebams.output, sample=unique_samples),
-        expand(rules.pycoqc_report.output, sample=unique_samples),
+        #expand(rules.pycoqc_report.output, sample=unique_samples),
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg", "gpc"], llr_thres=llr_threshold_nanopolish),
