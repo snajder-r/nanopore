@@ -18,14 +18,14 @@ rule bonito_basecall_metcall:
             unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam"))
     params:
         jobname='bonito_{sample}_{batch}',
-        runtime='03:00',
+        runtime='04:00',
         memusage='24000',
         slots='8',
         misc = gpu_params,
     shell:
         """
         {cuda_load_hook} && 
-        {bonito} basecaller {bonito_model} --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
+        {bonito} basecaller {bonito_model} --alignment-threads 1 --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
         {samtools} sort {output.unsorted} > {output.sorted} 
         """
 
