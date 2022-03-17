@@ -21,6 +21,13 @@ rule timp_format_read_stats:
         scriptparams=lambda wc: "-a" if "np_accessibility_" in wc["basepath"] else ""
     shell: "{python} /g/krebs/boulanger/Scripts/PythonScripts/Get_read_stat.py -v {params.scriptparams} -i {input} > {output}"
 
+rule timp_format_read_frequencies:
+    input: "{basepath}filtered_timp_format.tsv"
+    output: "{basepath}filtered_read_freqs.tsv"
+    params: **default_smalljob_params,
+        jobname="read_stats",
+    shell: "{python} /g/krebs/boulanger/Scripts/PythonScripts/GetFreq_from_bed.py -v -i {input} > {output}"
+
 rule accessibility_to_timp_format:
     input: rules.predict_accessibility.output.prediction
     output: Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_flank_{minflank}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
@@ -116,14 +123,15 @@ rule merge_timp_format:
 def merge_timp_format_read_stats_input(wildcards):
     source = wildcards["source"]
     how = wildcards["how"]
+    statstype = wildcards["statstype"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
-        suffix = f"sample_{sample}_batch_{batch}_{how}filtered_read_stats.tsv"
+        suffix = f"sample_{sample}_batch_{batch}_{how}filtered_read_{statstype}.tsv"
         filtered = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
         yield filtered
 
 rule merge_timp_format_read_stats:
     input: merge_timp_format_read_stats_input
-    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_stats.tsv.bgz")
+    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_{statstype}.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format_read_stats"
@@ -142,7 +150,8 @@ def all_smf_timpformat_input(timp_rule, **wildcards):
         for source in sources:
             yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
         for source in sources:
-            yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how)
+            for statstype in ["freqs", "stats"]:
+                yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how, statstype=statstype)
 
 rule all_smf_timpformat:
     input:
