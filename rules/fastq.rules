@@ -58,25 +58,28 @@ rule fast5_to_fastq:
         crit = 0
         with open(out_path,'w') as of:
             for i in range(len(input)):
-                with h5py.File(input[i],'r') as f:
-                    for read in f.keys():
-                        try:
-                            fq = f[read][fastq_group][()].decode('ascii')
-                            fq = fq.split('\n')
-                            if read.startswith('read_'):
-                                read = read[5:]
-                            fq[0] = f'@{read}'
-                            mean_q = compute_ont_mean_q_score(fq[3])
-                            if mean_q >= min_read_q:
-                                of.write('\n'.join(fq))
-                                passed+=1
-                            else:
-                                failed+=1
-                        except KeyError:
-                            import traceback
-                            print(traceback.format_exc())
-                            print(f"Error retreiving {read}/{fastq_group}")
-                            crit +=1
+                try:
+                    with h5py.File(input[i],'r') as f:
+                        for read in f.keys():
+                            try:
+                                fq = f[read][fastq_group][()].decode('ascii')
+                                fq = fq.split('\n')
+                                if read.startswith('read_'):
+                                    read = read[5:]
+                                fq[0] = f'@{read}'
+                                mean_q = compute_ont_mean_q_score(fq[3])
+                                if mean_q >= min_read_q:
+                                    of.write('\n'.join(fq))
+                                    passed+=1
+                                else:
+                                    failed+=1
+                            except KeyError:
+                                import traceback
+                                print(traceback.format_exc())
+                                print(f"Error retreiving {read}/{fastq_group}")
+                                crit +=1
+                except:
+                    print("Error reading h5 file ", input[i])
         print(f"{passed} passed, {failed} QC, {crit} critical error")
 
 checkpoint all_fast5_to_fastq:
