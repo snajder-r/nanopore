@@ -102,6 +102,7 @@ rule bonito_timp_format:
 
 def merge_timp_format_input(wildcards):
     source = wildcards["source"]
+    how = wildcards["how"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
         suffix = f"sample_{sample}_batch_{batch}_{how}filtered_timp_format.tsv"
         filtered = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
