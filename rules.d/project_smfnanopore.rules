@@ -59,7 +59,8 @@ rule nanonome_to_timp_format:
         "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q cpggpc -g {reference} > {output}"
 
 rule bonito_timp_format:
-    input: rules.bonito_basecall_metcall.output.sorted
+    input: bam=rules.bonito_basecall_metcall.output.sorted,
+           bai=rules.bonito_basecall_metcall.output.sorted+".bai"
     output: Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
     params:
         **default_smalljob_params,
@@ -79,7 +80,7 @@ rule bonito_timp_format:
 
         with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs={"CG"}) as converter, open(output[0], "wt") as out_f:
             for chrom in converter.ref.keys():
-                for read in ModBam(input[0],chrom,0,len(converter.ref[chrom])).reads():
+                for read in ModBam(input.bam,chrom,0,len(converter.ref[chrom])).reads():
                     llrs = np.zeros((read.reference_end - read.reference_start))
                     for pos_mod in read.mod_sites:
                         rpos = pos_mod.rpos
