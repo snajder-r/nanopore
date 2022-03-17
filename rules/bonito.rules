@@ -18,8 +18,8 @@ rule bonito_basecall_metcall:
             unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam"))
     params:
         jobname='bonito_{sample}_{batch}',
-        runtime='02:00',
-        memusage='8000',
+        runtime='03:00',
+        memusage='16000',
         slots='8',
         misc = gpu_params,
     shell:
