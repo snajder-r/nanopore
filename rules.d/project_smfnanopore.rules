@@ -96,13 +96,13 @@ rule bonito_timp_format:
 def merge_timp_format_input(wildcards):
     source = wildcards["source"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
-        suffix = f"sample_{sample}_batch_{batch}_ratefiltered_timp_format.tsv"
+        suffix = f"sample_{sample}_batch_{batch}_{how}filtered_timp_format.tsv"
         filtered = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
         yield filtered
 
 rule merge_timp_format:
     input: merge_timp_format_input
-    output: Path(basedir).joinpath('calls_timp_format', "{source}_calls.tsv.bgz")
+    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered_calls.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format"
@@ -138,22 +138,11 @@ def all_smf_timpformat_input(timp_rule, **wildcards):
     partfile = Path(timp_rule.output[0]).name
     source = partfile.replace("_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv", "")
     sources = expand(source,**wildcards)
-    # timp format
-    for source in sources:
-        yield rules.merge_timp_format.output[0].format(source=source)
-    # read stats unfiltered
-    for source in sources:
-        yield rules.merge_timp_format_read_stats.output[0].format(source=source, how="un")
-    # read stats filtered
-    for source in sources:
-        yield rules.merge_timp_format_read_stats.output[0].format(source=source,how="rate")
-
-
-rule all_npacc_timpformat:
-    input:
-        all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
-
-
+    for filter_how in ["un", "rate"]:
+        for source in sources:
+            yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
+        for source in sources:
+            yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how)
 
 rule all_smf_timpformat:
     input:
