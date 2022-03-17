@@ -19,7 +19,7 @@ rule bonito_basecall_metcall:
     params:
         jobname='bonito_{sample}_{batch}',
         runtime='03:00',
-        memusage='16000',
+        memusage='24000',
         slots='8',
         misc = gpu_params,
     shell:
