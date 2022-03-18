@@ -9,7 +9,7 @@ def compute_filter_timp_format_input(wc):
     if "_allmtypes_" in wc["basepath"]:
         for mtype in ["cpg", "gpc"]:
             # dont use format because there could be other wildcards
-            basepath = wc["basepath"].replace("_allmtypes_", f"_mtype_{mtype}")
+            basepath = wc["basepath"].replace("_allmtypes_", f"_mtype_{mtype}_")
             yield f"{basepath}_unfiltered_timp_format.tsv"
     else:
         basepath = wc["basepath"]
@@ -210,7 +210,7 @@ def all_smf_timpformat_input(timp_rule, calls=True, call_stats=True, filter_stat
     # Filter stats
     if filter_stats:
         for source in sources:
-            source = source.replace("_mtype_{mtype}_", "_allmtypes_")
+            source = source.replace("_mtype_cpg_", "_allmtypes_").replace("_mtype_gpc_", "_allmtypes_")
             yield rules.merge_timp_format_filter_stats.output[0].format(source=source)
 
 
@@ -245,7 +245,8 @@ rule all_smf_timpformat:
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
-        all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
+        all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito),
+        rules.smf_timpformat_report.output,
 
 rule all_smf_nanopore:
     input:
