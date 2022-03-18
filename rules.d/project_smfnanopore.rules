@@ -117,7 +117,7 @@ rule merge_timp_format:
         jobname = "merge_timp_format"
     shell: """
                {tabix_load_hook}
-               cat {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
+               awk 'NR==0||FNR>0{{print FNR}}' {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
                sleep 10 # napping to make sure index is not too new
                tabix -p bed  {output}
             """
@@ -139,7 +139,7 @@ rule merge_timp_format_read_stats:
         jobname = "merge_timp_format_read_stats"
     shell: """
                {tabix_load_hook}
-               cat {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
+               awk 'NR==0||FNR>0{{print FNR}}' {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
                sleep 10 # napping to make sure index is not too new
                tabix -p bed  {output}
             """
