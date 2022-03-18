@@ -5,44 +5,60 @@ Dependecies: Need to install
 default_smalljob_params = {"runtime":'1:00', "memusage":'4000', "slots":'1', "misc":''}
 default_sortjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'16', "misc":''}
 
-def filter_timp_format_input(wc):
-    if "np_metcalls" in wc["basepath"]:
+def compute_filter_timp_format_input(wc):
+    if "_allmtypes_" in wc["basepath"]:
         for mtype in ["cpg", "gpc"]:
-            basepath = wc["basepath"].replace("np_metcalls", f"np_metcalls_mtype_{mtype}")
+            # dont use format because there could be other wildcards
+            basepath = wc["basepath"].replace("_allmtypes_", f"_mtype_{mtype}")
             yield f"{basepath}_unfiltered_timp_format.tsv"
     else:
         basepath = wc["basepath"]
         yield f"{basepath}_unfiltered_timp_format.tsv"
 
-rule filter_timp_format:
-    input: filter_timp_format_input
-    output: "{basepath}_ratefiltered_timp_format.tsv"
+rule compute_filter_timp_format:
+    input: compute_filter_timp_format_input
+    output: report= temp("{basepath}_ratefilter_stats.part.json"),
+            reads=temp("{basepath}_ratefilter.part.reads"),
     params: **default_smalljob_params,
-        jobname = lambda wc: f"filter_timp_format_{Path(wc['basepath']).name}", reportdir=Path(basedir).joinpath("logs/")
+        jobname = lambda wc: f"filter_timp_format_{Path(wc['basepath']).name}"
     shell: """
-           cat {input} | {python} /g/krebs/boulanger/Scripts/PythonScripts/rm_fully_unmeth_reads.py -v -l {min_read_met_rate} -u {max_read_met_rate} -r {params.reportdir}/ | cut -f 4  | sort | uniq > {output}.reads.tmp &&
-           cat {input} | {python} /g/krebs/boulanger/Scripts/PythonScripts/rm_fully_unmeth_reads.py -v -l {min_read_met_rate} -u {max_read_met_rate} -r {params.reportdir}/ -k {output}.reads.tmp | sort -k1,1 -k2,2n > {output};
-           rm {output}.reads.tmp;
+           cat {input} | {python} -m nanopolish_smf.scripts.filter_reads_timp_format -l {min_read_met_rate} -u {max_read_met_rate} -r {output.report} > {output.reads}
+           """
+
+def filter_timp_format_input_reads(wc):
+    basepath = wc["basepath"]
+    if "_mtype_{mtype}" in basepath:
+        basepath = basepath.replace("_mtype_{mtype}", "_allmtypes_")
+    return expand(rules.compute_filter_timp_format.output.reads, basepath=basepath)
+
+rule filter_timp_format:
+    input:  unfiltered="{basepath}_unfiltered_timp_format.tsv",
+            reads=filter_timp_format_input_reads
+    output: filtered= temp("{basepath}_ratefiltered_timp_format.tsv"),
+    params: **default_smalljob_params,
+        jobname = lambda wc: f"filter_timp_format_{Path(wc['basepath']).name}"
+    shell: """
+           {python} -m nanopolish_smf.scripts.filter_timp_format_by_read -i {input.unfiltered} -r {input.reads} | sort -k1,1 -k2,2n > {output}
            """
 
 rule timp_format_read_stats:
     input: "{basepath}filtered_timp_format.tsv"
-    output: "{basepath}filtered_read_stats.tsv"
+    output: temp("{basepath}filtered_read_stats.tsv")
     params: **default_smalljob_params,
-        jobname="read_stats",
+        jobname=lambda wc: f"read_stats_{Path(wc['basepath']).name}",
         scriptparams=lambda wc: "-a" if "np_accessibility_" in wc["basepath"] else ""
     shell: "{python} /g/krebs/boulanger/Scripts/PythonScripts/Get_read_stat.py -v {params.scriptparams} -i {input} > {output}"
 
 rule timp_format_read_frequencies:
     input: "{basepath}filtered_timp_format.tsv"
-    output: "{basepath}filtered_read_freqs.tsv"
+    output: temp("{basepath}filtered_read_freqs.tsv")
     params: **default_smalljob_params,
-        jobname="read_stats",
+        jobname=lambda wc: f"read_freqs_{Path(wc['basepath']).name}",
     shell: "{python} /g/krebs/boulanger/Scripts/PythonScripts/GetFreq_from_bed.py -v -i {input} > {output}"
 
 rule accessibility_to_timp_format:
     input: rules.predict_accessibility.output.prediction
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_flank_{minflank}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_flank_{minflank}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
@@ -53,7 +69,7 @@ rule accessibility_to_timp_format:
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "np_metcalls_mtype_{mtype}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_metcalls_mtype_{mtype}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{mtype}"
@@ -62,7 +78,7 @@ rule nanopolish_to_timp_format:
 
 rule nanonome_to_timp_format:
     input: rules.nanonome.output
-    output: Path(basedir).joinpath('calls_timp_format', "tmp", "nanonome_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
+    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "nanonome_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}"
@@ -72,7 +88,7 @@ rule nanonome_to_timp_format:
 rule bonito_timp_format:
     input: bam=rules.bonito_basecall_metcall.output.sorted,
            bai=rules.bonito_basecall_metcall.output.sorted+".bai"
-    output: Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv")
+    output: temp(Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv"))
     params:
         **default_smalljob_params,
         jobname="convert_bonito_timp_format_{sample}_{batch}"
@@ -150,32 +166,93 @@ rule merge_timp_format_read_stats:
         jobname = "merge_timp_format_read_stats"
     shell: """
                {tabix_load_hook}
-               awk 'NR==0||FNR>0{{print FNR}}' {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
+               awk 'NR==0||FNR>0{{print $0}}' {input} | sort --parallel={params.slots} -T {scratch_dir} -k1,1 -k2,2n | bgzip > {output};
                sleep 10 # napping to make sure index is not too new
                tabix -p bed  {output}
             """
 
-def all_smf_timpformat_input(timp_rule, **wildcards):
+def merge_timp_format_filter_stats_input(wildcards):
+    source = wildcards["source"]
+    for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
+        suffix = f"sample_{sample}_batch_{batch}_ratefilter_stats.part.json"
+        part = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
+        yield part
+
+rule merge_timp_format_filter_stats:
+    input: merge_timp_format_filter_stats_input
+    output: temp(Path(basedir).joinpath('calls_timp_format', "{source}_ratefilter_stats.json"))
+    params:
+        **default_sortjob_params,
+        jobname = "merge_timp_format_filter_stats"
+    run:
+        import json
+        total_stats = {}
+        for file in input:
+            with open(file, "rt") as f:
+                part_dict = json.load(f)
+                for k,v in part_dict.items():
+                    total_stats[k] = total_stats.get(k, 0) + v
+        with open(output[0], "wt") as f:
+            json.dump(total_stats, f)
+
+def all_smf_timpformat_input(timp_rule, calls=True, call_stats=True, filter_stats=True, **wildcards):
     partfile = Path(timp_rule.output[0]).name
     source = partfile.replace("_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv", "")
-    source = source.replace("_mtype_{mtype}","")
+    sources = expand(source,**wildcards)
     for filter_how in ["un", "rate"]:
-        yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
-        for statstype in ["freqs", "stats"]:
-            yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how, statstype=statstype)
+        if calls:
+            for source in sources:
+                yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
+        if call_stats:
+            for source in sources:
+                for statstype in ["freqs", "stats"]:
+                    yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how, statstype=statstype)
+    # Filter stats
+    if filter_stats:
+        for source in sources:
+            source = source.replace("_mtype_{mtype}_", "_allmtypes_")
+            yield rules.merge_timp_format_filter_stats.output[0].format(source=source)
+
+
+rule smf_timpformat_report:
+    input:
+        np_accessibility=all_smf_timpformat_input(rules.accessibility_to_timp_format, calls=False, call_stats=False, filter_stats=True, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
+        nanonome=all_smf_timpformat_input(rules.nanonome_to_timp_format, calls=False, call_stats=False, filter_stats=True, llr_thres=llr_threshold_nanonome),
+        nanopolish=all_smf_timpformat_input(rules.nanopolish_to_timp_format, calls=False, call_stats=False, filter_stats=True, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
+        bonito=all_smf_timpformat_input(rules.bonito_timp_format, calls=False, call_stats=False, filter_stats=True,  llr_thres=llr_threshold_bonito)
+    output: f"{basedir}/report/smf/filtering_stats.txt"
+    params:
+        **default_sortjob_params,
+        jobname="smf_report"
+    run:
+        import json
+        import pandas as pd
+        from pathlib import Path
+
+        rows = {}
+        for caller in input.keys():
+            for file in input[caller]:
+                file = Path(str(file))
+                source = file.name.replace("_ratefilter_stats.json", "")
+                with open(file) as f:
+                    stats = json.load(f)
+                    rows[source] = stats
+        report = pd.DataFrame(rows).transpose()
+        report.to_csv(output[0], sep="\t")
 
 rule all_smf_timpformat:
     input:
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg", "gpc"], llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
 
 rule all_smf_nanopore:
     input:
         expand(rules.mergebams.output, sample=unique_samples),
+        rules.smf_timpformat_report.output,
         #expand(rules.pycoqc_report.output, sample=unique_samples),
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
