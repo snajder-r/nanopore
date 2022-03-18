@@ -5,13 +5,25 @@ Dependecies: Need to install
 default_smalljob_params = {"runtime":'1:00', "memusage":'4000', "slots":'1', "misc":''}
 default_sortjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'16', "misc":''}
 
+def filter_timp_format_input(wc):
+    if "np_metcalls" in wc["basepath"]:
+        for mtype in ["cpg", "gpc"]:
+            basepath = wc["basepath"].replace("np_metcalls", f"np_metcalls_mtype_{mtype}")
+            yield f"{basepath}_unfiltered_timp_format.tsv"
+    else:
+        basepath = wc["basepath"]
+        yield f"{basepath}_unfiltered_timp_format.tsv"
 
 rule filter_timp_format:
-    input: "{basepath}_unfiltered_timp_format.tsv"
+    input: filter_timp_format_input
     output: "{basepath}_ratefiltered_timp_format.tsv"
     params: **default_smalljob_params,
         jobname = lambda wc: f"filter_timp_format_{Path(wc['basepath']).name}", reportdir=Path(basedir).joinpath("logs/")
-    shell: "{python} /g/krebs/boulanger/Scripts/PythonScripts/rm_fully_unmeth_reads.py -v -i {input} -l {min_read_met_rate} -u {max_read_met_rate} -r {params.reportdir}/ | sort -k1,1 -k2,2n > {output}"
+    shell: """
+           cat {input} | {python} /g/krebs/boulanger/Scripts/PythonScripts/rm_fully_unmeth_reads.py -v -l {min_read_met_rate} -u {max_read_met_rate} -r {params.reportdir}/ | cut -f 4  | sort | uniq > {output}.reads.tmp &&
+           cat {input} | {python} /g/krebs/boulanger/Scripts/PythonScripts/rm_fully_unmeth_reads.py -v -l {min_read_met_rate} -u {max_read_met_rate} -r {params.reportdir}/ -k {output}.reads.tmp | sort -k1,1 -k2,2n > {output};
+           rm {output}.reads.tmp;
+           """
 
 rule timp_format_read_stats:
     input: "{basepath}filtered_timp_format.tsv"
@@ -36,7 +48,6 @@ rule accessibility_to_timp_format:
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
     run:
         from nanopolish_smf.timp_format import Converter
-        from nanopolish_smf.accessibility import AccessibilityEntry
         with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), flank=2) as conv:
             conv.convert_file(str(input), str(output))
 
@@ -168,5 +179,5 @@ rule all_smf_nanopore:
         #expand(rules.pycoqc_report.output, sample=unique_samples),
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg", "gpc"], llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format.replace("_mtype_{mtype}",""), llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
