@@ -158,13 +158,11 @@ rule merge_timp_format_read_stats:
 def all_smf_timpformat_input(timp_rule, **wildcards):
     partfile = Path(timp_rule.output[0]).name
     source = partfile.replace("_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv", "")
-    sources = expand(source,**wildcards)
+    source = source.replace("_mtype_{mtype}","")
     for filter_how in ["un", "rate"]:
-        for source in sources:
-            yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
-        for source in sources:
-            for statstype in ["freqs", "stats"]:
-                yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how, statstype=statstype)
+        yield rules.merge_timp_format.output[0].format(source=source, how=filter_how)
+        for statstype in ["freqs", "stats"]:
+            yield rules.merge_timp_format_read_stats.output[0].format(source=source, how=filter_how, statstype=statstype)
 
 rule all_smf_timpformat:
     input:
@@ -179,5 +177,5 @@ rule all_smf_nanopore:
         #expand(rules.pycoqc_report.output, sample=unique_samples),
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format.replace("_mtype_{mtype}",""), llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
