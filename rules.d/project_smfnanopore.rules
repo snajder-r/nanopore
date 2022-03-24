@@ -4,7 +4,7 @@ Dependecies: Need to install
 
 default_smalljob_params = {"runtime":'1:00', "memusage":'4000', "slots":'1', "misc":''}
 default_mediumjob_params = {"runtime":'4:00', "memusage":'8000', "slots":'2', "misc":''}
-default_sortjob_params = {"runtime":'16:00', "memusage":'32000', "slots":'16', "misc":''}
+default_sortjob_params = {"runtime":'16:00', "memusage":'8000', "slots":'2', "misc":''}
 
 def compute_filter_timp_format_input(wc):
     if "_allmtypes_" in wc["basepath"]:
@@ -48,7 +48,7 @@ rule timp_format_read_stats:
     params: **default_smalljob_params,
         jobname=lambda wc: f"read_stats_{Path(wc['basepath']).name}",
         scriptparams=lambda wc: "-a" if "np_accessibility_" in wc["basepath"] else ""
-    shell: """{python} /g/krebs/boulanger/Scripts/PythonScripts/Get_read_stat.py -v {params.scriptparams} -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C  sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
+    shell: """{python} /g/krebs/boulanger/Scripts/PythonScripts/Get_read_stat.py -v {params.scriptparams} -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
 
 rule timp_format_read_frequencies:
     input: "{basepath}filtered_timp_format.tsv.gz"
@@ -163,8 +163,8 @@ rule merge_timp_format_read_stats:
     input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="read_stats")
     output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_stats.tsv.bgz")
     params:
-        **default_mediumjob_params,
-        jobname = "merge_timp_format_read_stats"
+        **default_sortjob_params,
+        jobname = "merge_timp_format_read_stats_{source}_{how}filtered"
     shell: """
                {tabix_load_hook}
                {python} -m nanopolish_smf.scripts.merge_presorted_bed -i {input} -s 1 | bgzip > {output.part};
@@ -176,8 +176,8 @@ rule merge_timp_format_site_freqs:
     input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="site_freqs")
     output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.site_freqs.tsv.bgz")
     params:
-        **default_mediumjob_params,
-        jobname = "merge_timp_format_site_freqs"
+        **default_sortjob_params,
+        jobname = "merge_timp_format_site_freqs_{source}_{how}filtered"
     shell: """
                {tabix_load_hook}
                {python} -m nanopolish_smf.scripts.merge_presorted_bed -i {input} -s 1 | {python} -m nanopolish_smf.scripts.aggregate_met_counts_frequencies -s 1 | bgzip > {output.part};
@@ -272,6 +272,3 @@ rule all_smf_nanopore:
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
-
-rule testmerge:
-    input:"/g/krebs/group_folder/smf_nanopore/analysis/nanopore_runs/run6/calls_timp_format/nanonome_thres_2.0_unfiltered.read_stats.tsv.bgz"
