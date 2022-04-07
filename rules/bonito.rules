@@ -23,12 +23,10 @@ def bonito_script():
     script = """
     {cuda_load_hook} && 
     {bonito} basecaller {bonito_model} --alignment-threads 1 --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
-    {samtools} sort {output.unsorted} > {output.sorted} 
-    """
+    {samtools} sort {output.unsorted} > {output.sorted} """
     if mapping_filter_params != "" or filter_chroms:
         chrom_filter_string = " ".join(chroms) if filter_chroms else ""
-        script += """
-        && 
+        script += """ &&
         mv {output.sorted} {output.sorted}.unfiltered;
         {samtools} index {output.sorted}.unfiltered;
         {samtools} view {mapping_filter_params} {output.sorted}.unfiltered """+chrom_filter_string+""" -b > {output.sorted};
