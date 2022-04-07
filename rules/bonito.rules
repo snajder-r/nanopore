@@ -32,14 +32,15 @@ def bonito_script():
         mv {output.sorted} {output.sorted}.unfiltered;
         {samtools} index {output.sorted}.unfiltered;
         {samtools} view {mapping_filter_params} {output.sorted}.unfiltered """+chrom_filter_string+""" -b > {output.sorted};
-        rm {output}.unfiltered;
+        rm {output.sorted}.unfiltered;
         """
     return script
 
 rule bonito_basecall_metcall:
     input: Path(basedir).joinpath("raw", "{sample}", "batched", "{batch}")
     output: sorted = Path(basedir).joinpath("remora", "{sample}", "{batch}.sorted.bam"),
-            unsorted = temp(temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam")))
+            unsorted = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted.bam")),
+            summary = temp(Path(basedir).joinpath("remora","{sample}","{batch}.unsorted_summary.tsv"))
     params:
         jobname='bonito_{sample}_{batch}',
         runtime='04:00',
