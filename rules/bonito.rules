@@ -20,9 +20,14 @@ if "filter_chroms" not in globals().keys():
 
 
 def bonito_script():
+    if "remora_model" in globals().keys():
+        remora_model_str = f"--modified-base-model {remora_model}"
+    else:
+        remora_model_str = f"--modified-bases 5mC"
+
     script = """
     {cuda_load_hook} && 
-    {bonito} basecaller {bonito_model} --alignment-threads 1 --reference {reference_mmi} --modified-bases 5mC -- {input} > {output.unsorted} &&
+    {bonito} basecaller {bonito_model} --alignment-threads 1 --reference {reference_mmi} """ + remora_model_str + """ -- {input} > {output.unsorted} &&
     {samtools} sort {output.unsorted} > {output.sorted} """
     if mapping_filter_params != "" or filter_chroms:
         chrom_filter_string = " ".join(chroms) if filter_chroms else ""

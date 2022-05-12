@@ -1,7 +1,13 @@
 from pathlib import Path
 
+
+
 default_prediction_params = {"jobname":'pred_nanopolish_{sample}_{batch}', "runtime":'24:00', "memusage":'16000',
         "slots":'8', "misc":'', "alphabet": "m5c"}
+
+if "accessibility_alphabet" in globals().keys():
+    default_prediction_params["alphabet"]  = accessibility_alphabet
+
 
 default_smalljob_params = {"runtime":'4:00', "memusage":'16000', "slots":'2', "misc":''}
 default_largememjob_params = {"runtime":'8:00', "memusage":'32000', "slots":'2', "misc":''}
@@ -32,7 +38,7 @@ rule predict_accessibility:
         bai=f"{rules.alignment.output}.bai",
         model=accessibility_model
     output:
-        model = temp(predict_accessibility_outdir().joinpath('r9.4_450bps.m5c.6mer.template.model')),
+        model = temp(predict_accessibility_outdir().joinpath(Path(accessibility_model).name)),
         model_fof=temp(predict_accessibility_outdir().joinpath('model_fof.txt')),
         prediction=predict_accessibility_outdir().joinpath('accessibility_prediction.tsv')
     params:

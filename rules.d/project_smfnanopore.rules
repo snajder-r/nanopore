@@ -8,7 +8,7 @@ default_sortjob_params = {"runtime":'16:00', "memusage":'8000', "slots":'2', "mi
 
 def compute_filter_timp_format_input(wc):
     if "_allmtypes_" in wc["basepath"]:
-        for mtype in ["cpg", "gpc"]:
+        for mtype in mettypes:
             # dont use format because there could be other wildcards
             basepath = wc["basepath"].replace("_allmtypes_", f"_mtype_{mtype}_")
             yield f"{basepath}_unfiltered_timp_format.tsv.gz"
@@ -48,48 +48,59 @@ rule timp_format_read_stats:
     params: **default_smalljob_params,
         jobname=lambda wc: f"read_stats_{Path(wc['basepath']).name}",
         scriptparams=lambda wc: "-a" if "np_accessibility_" in wc["basepath"] else ""
-    shell: """{python} /g/krebs/boulanger/Scripts/PythonScripts/Get_read_stat.py -v {params.scriptparams} -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
+    shell: """{python} -m nanopolish_smf.scripts.Get_read_stat -v {params.scriptparams} -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
 
 rule timp_format_read_frequencies:
     input: "{basepath}filtered_timp_format.tsv.gz"
     output: temp("{basepath}filtered_site_freqs.tsv.gz")
     params: **default_smalljob_params,
         jobname=lambda wc: f"site_freqs_{Path(wc['basepath']).name}",
-    shell: """{python} /g/krebs/boulanger/Scripts/PythonScripts/GetFreq_from_bed.py -v -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
+    shell: """{python} -m nanopolish_smf.scripts.GetFreq_from_bed -v -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
 
 rule accessibility_to_timp_format:
     input: rules.predict_accessibility.output.prediction
-    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_accessibility_flank_{minflank}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
+    output: temp(Path(scratch_dir).joinpath('calls_timp_format_batched', "np_accessibility_flank_{minflank}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
     run:
         from nanopolish_smf.timp_format import Converter
-        with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), flank=2) as conv:
+        if "accessibility_alphabet" in globals().keys():
+            if accessibility_alphabet == "m6a":
+                motifs = {"A"}
+            else:
+                motifs = {"CG", "GC"}
+        with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs=motifs, flank=2) as conv:
             conv.convert_file(str(input), str(output))
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output
-    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "np_metcalls_mtype_{mtype}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
+    output: temp(Path(scratch_dir).joinpath('calls_timp_format_batched', "np_metcalls_mtype_{mtype}_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{mtype}"
     shell:
         "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q {wildcards.mtype} -g {reference} | gzip > {output}"
 
-rule nanonome_to_timp_format:
-    input: rules.nanonome.output
-    output: temp(Path(basedir).joinpath('calls_timp_format', "tmp", "nanonome_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
-    params:
-        **default_smalljob_params,
-        jobname = "convert_timp_format_{sample}_{batch}"
-    shell:
-        "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q cpggpc -g {reference} |gzip> {output}"
+if "nanonome" in globals().keys():
+    rule nanonome_to_timp_format:
+        input: rules.nanonome.output
+        output: temp(Path(scratch_dir).joinpath('calls_timp_format_batched', "nanonome_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
+        params:
+            **default_smalljob_params,
+            jobname = "convert_timp_format_{sample}_{batch}"
+        shell:
+            "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q cpggpc -g {reference} |gzip> {output}"
+else:
+    """Dummy rule"""
+    rule nanonome_to_timp_format:
+        output: []
+
 
 rule bonito_timp_format:
     input: bam=rules.bonito_basecall_metcall.output.sorted,
            bai=rules.bonito_basecall_metcall.output.sorted+".bai"
-    output: temp(Path(basedir).joinpath("calls_timp_format", "tmp", "bonito_metcalls_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
+    output: temp(Path(scratch_dir).joinpath('calls_timp_format_batched',"bonito_metcalls_thres_{llr_thres}_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz"))
     params:
         **default_smalljob_params,
         jobname="convert_bonito_timp_format_{sample}_{batch}"
@@ -106,8 +117,12 @@ rule bonito_timp_format:
             log(p(x|a)/p(x|~a)) given a prior pa(a)
             """
             return -np.log(prior * (1 - p) / (p * (1 - prior)))
+        if "remora_motifs" in globals().keys():
+            motifs = set(remora_motifs)
+        else:
+            motifs = {"CG"}
 
-        with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs={"CG"}) as converter, gzip.open(output[0], "wt") as out_f:
+        with Converter(reference, exclude_zero_calls=True, llr_threshold=float(wildcards["llr_thres"]), motifs=motifs) as converter, gzip.open(output[0], "wt") as out_f:
             for chrom in converter.ref.keys():
                 for read in ModBam(input.bam,chrom,0,len(converter.ref[chrom])).reads():
                     llrs = np.zeros((read.reference_end - read.reference_start))
@@ -128,14 +143,12 @@ rule bonito_timp_format:
                         continue
                     out_f.write(f"{timp_line}\n")
 
-
-
 def merge_timp_format_input(wildcards):
     source = wildcards["source"]
     how = wildcards["how"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
         suffix = f"sample_{sample}_batch_{batch}_{how}filtered_timp_format.tsv.gz"
-        filtered = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
+        filtered = Path(scratch_dir).joinpath('calls_timp_format_batched', f"{source}_{suffix}")
         yield filtered
 
 rule merge_timp_format:
@@ -156,7 +169,7 @@ def merge_timp_format_read_stats_input(wildcards, statstype=None):
     how = wildcards["how"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
         suffix = f"sample_{sample}_batch_{batch}_{how}filtered_{statstype}.tsv.gz"
-        filtered = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
+        filtered = Path(scratch_dir).joinpath('calls_timp_format_batched', f"{source}_{suffix}")
         yield filtered
 
 rule merge_timp_format_read_stats:
@@ -189,7 +202,7 @@ def merge_timp_format_filter_stats_input(wildcards):
     source = wildcards["source"]
     for sample, batch in zip(sbf.sb_samples, sbf.sb_batches):
         suffix = f"sample_{sample}_batch_{batch}_ratefilter_stats.part.json"
-        part = Path(basedir).joinpath("calls_timp_format", "tmp", f"{source}_{suffix}")
+        part = Path(scratch_dir).joinpath('calls_timp_format_batched', f"{source}_{suffix}")
         yield part
 
 rule merge_timp_format_filter_stats:
@@ -210,6 +223,8 @@ rule merge_timp_format_filter_stats:
             json.dump(total_stats, f)
 
 def all_smf_timpformat_input(timp_rule, calls=True, call_stats=True, filter_stats=True, **wildcards):
+    if len(timp_rule.output) == 0:
+        return
     partfile = Path(timp_rule.output[0]).name
     source = partfile.replace("_sample_{sample}_batch_{batch}_unfiltered_timp_format.tsv.gz", "")
     sources = expand(source,**wildcards)
@@ -225,7 +240,7 @@ def all_smf_timpformat_input(timp_rule, calls=True, call_stats=True, filter_stat
     # Filter stats
     if filter_stats:
         for source in sources:
-            source = source.replace("_mtype_cpg_", "_allmtypes_").replace("_mtype_gpc_", "_allmtypes_")
+            source = source.replace("_mtype_cpg_", "_allmtypes_").replace("_mtype_gpc_", "_allmtypes_").replace("_mtype_dam_", "_allmtypes_")
             yield rules.merge_timp_format_filter_stats.output[0].format(source=source)
 
 
@@ -233,7 +248,7 @@ rule smf_timpformat_report:
     input:
         np_accessibility=all_smf_timpformat_input(rules.accessibility_to_timp_format, calls=False, call_stats=False, filter_stats=True, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         nanonome=all_smf_timpformat_input(rules.nanonome_to_timp_format, calls=False, call_stats=False, filter_stats=True, llr_thres=llr_threshold_nanonome),
-        nanopolish=all_smf_timpformat_input(rules.nanopolish_to_timp_format, calls=False, call_stats=False, filter_stats=True, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
+        nanopolish=all_smf_timpformat_input(rules.nanopolish_to_timp_format, calls=False, call_stats=False, filter_stats=True, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         bonito=all_smf_timpformat_input(rules.bonito_timp_format, calls=False, call_stats=False, filter_stats=True,  llr_thres=llr_threshold_bonito)
     output: f"{basedir}/report/smf/filtering_stats.txt"
     params:
@@ -255,11 +270,12 @@ rule smf_timpformat_report:
         report = pd.DataFrame(rows).transpose()
         report.to_csv(output[0], sep="\t")
 
+
 rule all_smf_timpformat:
     input:
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito),
         rules.smf_timpformat_report.output,
 
@@ -270,5 +286,6 @@ rule all_smf_nanopore:
         #expand(rules.pycoqc_report.output, sample=unique_samples),
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=["cpg","gpc"], llr_thres=llr_threshold_nanopolish),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
+
