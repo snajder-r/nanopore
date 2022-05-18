@@ -1,197 +1,88 @@
+from pathlib import Path
+from meth5.meth5 import MetH5File
 
-rule pycometh_segment_parents:
-    input: expand(rules.merge_met_hdf5.output, sample=["HG003", "HG004"], mettype="cpg")
-    output: Path(basedir).joinpath("segmentation_parents/chr_{chrom}_chunk_{chunk}_segmented_cpg.tsv")
-    params:
-        jobname='segment_parents_{chrom}_{chunk}',
-        runtime='12:00',
-        memusage='16000',
-        slots='16',
-        misc=""
-    shell: """{pycometh} Meth_Seg --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 14 --reader_workers 2 --max_segments_per_window 20"""
-
-def all_nanoepiseg_parents_input(wc):
-    sample = "HG003"
-    mettype="cpg"
-    input_file = rules.merge_met_hdf5.output[0].format(sample=sample, mettype=mettype)
-    with MetH5File(input_file, "r") as f:
-        for chrom in chroms:
-            if chrom in f.get_chromosomes():
-                for chunk in range(f[chrom].get_number_of_chunks()):
-                    yield rules.nanoepiseg_parents.output[0].format(chrom=chrom, chunk=chunk)
-
-rule all_nanoepiseg_parents:
-    input: all_nanoepiseg_parents_input
-
-rule nanoepiseg_parents_bed:
-    input: rules.nanoepiseg_parents.output
-    output: Path(basedir).joinpath("segmentation_parents/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.bed")
-    params:
-        jobname='nanoepiseg_{mettype}_{chrom}_{chunk}',
-        runtime='4:00',
-        memusage='8000',
-        slots='1',
-        misc=""
-    shell: """cut -f 1,2,3 {input} | grep -v "chrom" | sort -k1,1 -k2,2n | uniq  > {output}"""
-
-rule pycometh_parents:
-    input: hdf5 = expand(rules.merge_met_hdf5.output, sample=["HG003", "HG004"], mettype="{mettype}"),
-           segments = rules.nanoepiseg_parents_bed.output
-    output: Path(basedir).joinpath("diffmet_parents/pycometh_metcomp_chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
-    params:
-        jobname='pycometh_{mettype}_{chrom}_{chunk}',
-        runtime='4:00',
-        memusage='8000',
-        slots='12',
-        misc=""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
-
-def all_pycometh_parents_input(wc):
-    for mettype in mettypes:
-        input_file = rules.merge_met_hdf5.output[0].format(sample="HG003", mettype=mettype)
-        with MetH5File(input_file, "r") as f:
-            for chrom in chroms:
-                if chrom in f.get_chromosomes():
-                    for chunk in range(f[chrom].get_number_of_chunks()):
-                        yield rules.pycometh_parents.output[0].format(mettype=mettype, chrom=chrom, chunk=chunk)
-
-rule merge_pycometh_parents:
-    input: all_pycometh_parents_input
-    output: Path(basedir).joinpath("diffmet_parents/met_comp_merged_parents.bed")
-    params:
-        jobname='merge',
-        runtime='01:00',
-        memusage='8000',
-        slots='16',
-        misc=''
-    shell: pycometh_merge_script
-
-rule merge_pycometh_parents_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="diffmet_parents", sample="parents")
+pycometh_merge_script = """
+head -1 {input[0]} > {output};
+grep -hv "chrom" {input} | sort -k1,1 -k2,2n -k3,3n --parallel={params.slots} >> {output}
+"""
 
 
 ############
-# ASM FROM haplotype informed fastseg segmentation
-############
-rule pycometh_asm_fastseg:
-    input: hdf5 = rules.merge_met_hdf5.output,
-           segments = Path(basedir).joinpath("bs/{sample}_mockbsseq_hps_fastseg/{chunk}")
-    output: Path(basedir).joinpath("asm_fastseg/{sample}/pycometh_metcomp_chunk_{chunk}_segmented_{mettype}.tsv")
-    params:
-        jobname='pycometh_fs_{sample}_{mettype}_{chunk}',
-        runtime='4:00',
-        memusage='8000',
-        slots='12',
-        misc=""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} -r haplotype --sample_id_list H1 H2 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
-
-
-def all_pycometh_asm_fastseg_input(wc):
-    for mettype in mettypes:
-        glob = glob_wildcards(rules.pycometh_asm_fastseg.input.segments.format(sample=wc["sample"], chunk="{chunk}"))
-        for chunk in glob.chunk:
-            yield rules.pycometh_asm_fastseg.output[0].format(mettype=mettype, chunk=chunk, sample=wc["sample"])
-
-
-
-rule pycometh_merge_asm_fastseg:
-    input: all_pycometh_asm_fastseg_input
-    output: Path(basedir).joinpath("asm_fastseg/met_comp_merged_{sample}.bed")
-    params:
-        jobname='merge',
-        runtime='01:00',
-        memusage='8000',
-        slots='16',
-        misc=''
-    shell: pycometh_merge_script
-
-rule all_pycometh_fastseg_merge_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="asm_fastseg", sample="HG003")
-
-############
-# ASM FROM methylkit (no haplotype information)
+# ASM FROM OTHER SEGMENTATIONS
 ############
 
-rule pycometh_asm_methylkit:
-    input: hdf5=rules.merge_met_hdf5.output, \
-           segments=Path(basedir).joinpath("bs/{sample}_mockbsseq_seg/{chunk}")
-    output: Path(basedir).joinpath("asm_methylkit/{sample}/pycometh_metcomp_chunk_{chunk}_segmented_{mettype}.tsv")
+rule pycometh_diffmet_asm_methylkit:
+    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methylkit.tsv"),
+           m5=rules.merge_met_hdf5.output
+    output:
+        tsv=Path(basedir,"pycometh/asm/diffmet_methylkit/{mettype}/{sample}_diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/asm/diffmet_methylkit/{mettype}/{sample}_diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-            jobname = 'pycometh_mk_{sample}_{mettype}_{chunk}',
-            runtime = '4:00',
-            memusage = '8000',
-            slots = '12',
-            misc = ""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} -r haplotype --sample_id_list H1 H2 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+        jobname="pycometh_{sample}_{hypothesis}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16",
+    shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
+rule pycometh_diffmet_asm_methylkit_all:
+    input: expand(rules.pycometh_diffmet_asm_methylkit.output.tsv, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], mettype=mettypes)
 
-def all_pycometh_asm_methylkit_input(wc):
-    for mettype in mettypes:
-        glob = glob_wildcards(rules.pycometh_asm_methylkit.input.segments)
-        for sample, chunk in zip(glob.sample, glob.chunk):
-            yield rules.pycometh_asm_methylkit.output[0].format(mettype=mettype, chunk=chunk, sample=sample)
-
-
-rule pycometh_merge_asm_methylkit:
-    input: all_pycometh_asm_methylkit_input
-    output: Path(basedir).joinpath("asm_methylkit/met_comp_merged_{sample}.bed")
+rule pycometh_diffmet_asm_methcp:
+    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methcp.tsv"),
+           m5=rules.merge_met_hdf5.output
+    output:
+        tsv=Path(basedir,"pycometh/asm/diffmet_methcp/{mettype}/{sample}_diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/asm/diffmet_methcp/{mettype}/{sample}_diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname='merge',
-        runtime='01:00',
-        memusage='8000',
-        slots='16',
-        misc=''
-    shell: pycometh_merge_script
+        jobname="pycometh_{sample}_{hypothesis}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16",
 
-rule all_pycometh_methylkit_merge_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="asm_methylkit", sample="HG003")
+    shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -f {reference} -a {input.segmentation} -w {resources.cpus} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
-rule pycometh_parents_methylkit:
-    input:
-        hdf5 = expand(rules.merge_met_hdf5.output,sample=["HG003", "HG004"],mettype="{mettype}"),
-        segments= Path(basedir).joinpath("bs/parents_mockbsseq_hps_fastseg/{chunk}")
-    output: Path(basedir).joinpath("diffmet_parents_methylkit/pycometh_metcomp_chunk_{chunk}_segmented_{mettype}.tsv")
+rule pycometh_diffmet_asm_methcp_all:
+    input: expand(rules.pycometh_diffmet_asm_methcp.output.tsv, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], mettype=mettypes)
+
+
+############
+# PARENTS COMPARISON FROM OTHER SEGMENTATIONS
+############
+
+rule pycometh_diffmet_samplecomp_methylkit:
+    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methylkit.tsv"),
+           m5=expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=mettypes)
+    output:
+        tsv=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname = 'pycometh_{mettype}_{chunk}',
-        runtime = '4:00',
-        memusage = '8000', slots = '12', misc = ""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16",
 
+    shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
-def all_pycometh_parents_methylkit_input(wc):
-    for mettype in mettypes:
-        glob = glob_wildcards(rules.pycometh_parents_methylkit.input.segments)
-        for chunk in glob.chunk:
-            yield rules.pycometh_parents_methylkit.output[0].format(mettype=mettype, chunk=chunk)
-
-
-rule all_pycometh_parents_methylkit:
-    input: all_pycometh_parents_methylkit_input
-    output: Path(basedir).joinpath("diffmet_parents_methylkit/met_comp_merged_parents.bed")
+rule pycometh_diffmet_samplecomp_methcp:
+    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methcp.tsv"),
+           m5=expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=mettypes)
+    output:
+        tsv=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname='merge',
-        runtime='01:00',
-        memusage='8000',
-        slots='16',
-        misc=''
-    shell: pycometh_merge_script
-
-rule all_pycometh_parents_methylkit_merge_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="diffmet_parents_methylkit", sample="parents")
-
-
-rule pycometh_parents_diff_methylkit:
-    input:
-        hdf5 = expand(rules.merge_met_hdf5.output,sample=["HG003", "HG004"],mettype="cpg"),
-        segments= Path(basedir).joinpath("bs/parents_mockbsseq_diff_methylkit_seg.bed")
-    output: Path(basedir).joinpath("diffmet_parents_methylkit/methylkit_diff_met_comp.tsv")
-    params:
-        jobname = 'pycometh',
-        runtime = '4:00',
-        memusage = '8000', slots = '12', misc = ""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} --sample_id_list HG003 HG004 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
-
-
+        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16"
+    shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
 
 ############
@@ -203,10 +94,10 @@ rule nanoepiseg_subsetted:
     output: Path(basedir).joinpath("subset_m5/segmentation/subset_{i}_segmented_cpg.tsv")
     params:
         jobname = 'nanoepiseg_subset_{i}',
-        runtime = '24:00',
-        memusage = '16000',
-        slots = '16',
-        misc = ""
+        runtime= "24:00",
+        slots="16",
+        memusage="16000",
+        misc= ""
     shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome 21_{wildcards.i} --read_groups_keys haplotype --out_tsv {output} --workers 14 --reader_workers 2 --max_segments_per_window 20"""
 
 rule all_nanoepiseg_subsetted:

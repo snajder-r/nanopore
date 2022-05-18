@@ -1,100 +1,127 @@
 from pathlib import Path
 from meth5.meth5 import MetH5File
 
-rule nanoepiseg:
+def pycometh_segment_get_chrom_batches_asm(wildcards):
+    with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards), "r", chunk_size=pycometh_segment_chunks_per_job) as f:
+        for chrom in f.get_chromosomes():
+            cur_batch = []
+            for chunk in f[chrom].get_chunk_ids():
+                cur_batch.append(f"{chunk}")
+                if len(cur_batch) == pycometh_segment_chunks_per_job:
+                    yield chrom, "_".join(cur_batch)
+                    cur_batch = []
+            if len(cur_batch) > 0:
+                yield chrom, "_".join(cur_batch)
+
+rule pycometh_segment_chunks_asm:
     input: rules.merge_met_hdf5.output
-    output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
+    output: temp(Path(basedir, "pycometh/asm/{mettype}/segmentation/{sample}/chunks_{windowsize}_{maxsegments}/{chrom}/segments_{chunks}.tsv"))
     params:
-        jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
-        runtime='8:00',
-        memusage='8000',
-        slots='6',
-        misc=""
-    shell: """{nanoepiseg} segment_h5 --m5files {input} --chromosome {wildcards.chrom} --chunks {wildcards.chunk} --read_groups_keys haplotype --out_tsv {output} --workers 4 --reader_workers 2 --max_segments_per_window 20"""
+        jobname='segment_{chunks}',
+        chunks=lambda wc: wc["chunks"].replace("_"," "),
+        misc="",
+        runtime='16:00',
+        memusage='16000',
+        slots='8',
+    shell: "{pycometh} Meth_Seg -i {input} -r {pycometh_haplotype_readgroup_param} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
-rule nanoepiseg_bed:
-    input: rules.nanoepiseg.output
-    output: Path(basedir).joinpath("segmentation/{sample}/chr_{chrom}_chunk_{chunk}_segmented_{mettype}.bed")
+def pycometh_segment_asm_merge_input(wc):
+    chroms_batches = list(pycometh_segment_get_chrom_batches_asm())
+    # Shuffling the list of chrom-chunks might help better load-distribute the stress on the file system
+    shuffle(chroms_batches)
+
+    for chrom, chunks in chroms_batches:
+        yield rules.pycometh_segment_chunks_asm.output[0].format(chrom=chrom, chunks=chunks, windowsize=wc["windowsize"], maxsegments=wc["maxsegments"], sample=wc["sample"])
+
+rule pycometh_segment_asm_merge:
+    input: pycometh_segment_asm_merge_input
+    output: Path(basedir,"pycometh/asm/{mettype}/segmentation/{sample}_segmentation_{windowsize}_{maxsegments}.tsv")
     params:
-        jobname='nanoepiseg_{sample}_{mettype}_{chrom}_{chunk}',
-        runtime='0:30',
-        memusage='8000',
-        slots='1',
-        misc=""
-    shell: """cut -f 1,2,3 {input} | grep -v "chrom" | sort -k1,1 -k2,2n | uniq > {output}"""
+        jobname="merge_segmentation_{sample}_{windowsize}_{maxsegments}",
+        misc="",
+        runtime="01:00",
+        memusage="16000",
+        slots="8",
+    shell: "cat {input} | sort -k1,1 -k2,2n --parallel={params.slots} > {output}"
 
-def all_nanoepiseg_input(wc):
-    for sample in unique_samples:
-        for mettype in mettypes:
-            input_file = rules.merge_met_hdf5.output[0].format(sample=sample, mettype=mettype)
-            with MetH5File(input_file, "r") as f:
-                for chrom in chroms:
-                    if chrom in f.get_chromosomes():
-                        for chunk in range(f[chrom].get_number_of_chunks()):
-                            yield rules.nanoepiseg.output[0].format(sample=sample, mettype=mettype, chrom=chrom, chunk=chunk)
-
-rule all_nanoepiseg:
-    input: all_nanoepiseg_input
-
-rule pycometh_asm:
-    input: hdf5 = rules.merge_met_hdf5.output,
-           segments = rules.nanoepiseg_bed.output
-    output: Path(basedir).joinpath("asm/{sample}/pycometh_metcomp_chr_{chrom}_chunk_{chunk}_segmented_{mettype}.tsv")
+rule pycometh_diffmet_asm:
+    input: segmentation=rules.pycometh_segment_asm_merge.output,
+           m5=rules.merge_met_hdf5.output
+    output:
+        tsv=Path(basedir,"pycometh/asm/{mettype}/diffmet/{sample}_diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/asm/{mettype}/diffmet/{sample}_diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname='pycometh_{sample}_{mettype}_{chrom}_{chunk}',
-        runtime='4:00',
-        memusage='8000',
-        slots='12',
-        misc=""
-    shell: """{pycometh} Meth_Comp -i {input.hdf5} -f {reference} -a {input.segments} -w {params.slots} -t {output} -r haplotype --sample_id_list H1 H2 --min_num_reads_per_interval 5 --hypothesis bs_diff --do_independent_hypothesis_weighting"""
+        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16",
+    shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
-def pycometh_asm_input(wc):
-    for mettype in mettypes:
-        input_file = rules.merge_met_hdf5.output[0].format(sample=wc["sample"], mettype=mettype)
-        with MetH5File(input_file, "r") as f:
-            for chrom in chroms:
-                if chrom in f.get_chromosomes():
-                    for chunk in range(f[chrom].get_number_of_chunks()):
-                        yield rules.pycometh_asm.output[0].format(sample=wc["sample"], mettype=mettype, chrom=chrom, chunk=chunk)
+rule pycometh_diffmet_asm_all:
+    input: expand(rules.pycometh_diffmet_asm.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
 
-pycometh_merge_script = """
-head -1 {input[0]} > {output};
-grep -hv "chrom" {input} | sort -k1,1 -k2,2n -k3,3n --parallel={params.slots} >> {output}
-"""
+# Sample comparison
 
-rule pycometh_merge_adjust:
-    input: Path(basedir).joinpath("{subdir}/met_comp_merged_{sample}.bed")
-    output: Path(basedir).joinpath("{subdir}/met_comp_adj_{sample}.bed")
+def pycometh_segment_get_chrom_batches_samplecomp(wildcards):
+    with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards, sample=pycometh_diffmet_samples[0]),
+            "r", chunk_size=pycometh_segment_chunks_per_job) as f:
+        for chrom in f.get_chromosomes():
+            cur_batch = []
+            for chunk in f[chrom].get_chunk_ids():
+                cur_batch.append(f"{chunk}")
+                if len(cur_batch) == pycometh_segment_chunks_per_job:
+                    yield chrom, "_".join(cur_batch)
+                    cur_batch = []
+            if len(cur_batch) > 0:
+                yield chrom, "_".join(cur_batch)
+
+rule pycometh_segment_chunks_samplecomp:
+    input: lambda wc: expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=wc["mettype"])
+    output: temp(Path(basedir, "pycometh/samplecomp/{mettype}/segmentation/chunks_{windowsize}_{maxsegments}/{chrom}/segments_{chunks}.tsv"))
     params:
-        jobname = 'adj_pval', runtime = '01:00', memusage = '16000', slots = '1', misc = ''
-    run:
-        import pandas as pd
-        import numpy as np
-        from nanoepitools.math import fdr_from_pvals
+        jobname='segment_{chunks}',
+        chunks=lambda wc: wc["chunks"].replace("_"," "),
+        misc="",
+        runtime='16:00',
+        memusage='16000',
+        slots='8'
+    shell: "{pycometh} Meth_Seg -i {input} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
-        df = pd.read_csv(input[0],sep="\t")
-        pvals = np.array(df["pvalue"])
-        weights = np.array(df["ihw_weight"])
-        idx = ~np.isnan(pvals)
-        pvals = pvals[idx]
-        weights = weights[idx]
-        weights = (weights - np.mean(weights)) * 2 - 1
-        #pvals = pvals / weights
-        fdr = fdr_from_pvals(pvals)
-        df.loc[idx, "adj_pvalue"] = fdr
-        df.to_csv(output[0],sep="\t",index=False)
+def pycometh_segment_samplecomp_merge_input(wc):
+    chroms_batches = list(pycometh_segment_get_chrom_batches_samplecomp())
+    # Shuffling the list of chrom-chunks might help better load-distribute the stress on the file system
+    shuffle(chroms_batches)
 
+    for chrom, chunks in chroms_batches:
+        yield rules.pycometh_segment_chunks_samplecomp.output[0].format(chrom=chrom, chunks=chunks, windowsize=wc["windowsize"], maxsegments=wc["maxsegments"])
 
-rule pycometh_merge_asm:
-    input: pycometh_asm_input
-    output: Path(basedir).joinpath("asm/met_comp_merged_{sample}.bed")
+rule pycometh_segment_samplecomp_merge:
+    input: pycometh_segment_samplecomp_merge_input
+    output: Path(basedir,"pycometh/samplecomp/{mettype}/segmentation/segmentation_{windowsize}_{maxsegments}.tsv")
     params:
-        jobname='merge',
-        runtime='01:00',
-        memusage='8000',
-        slots='16',
-        misc=''
-    shell: pycometh_merge_script
+        jobname="merge_segmentation_{windowsize}_{maxsegments}",
+        misc="",
+        runtime="01:00",
+        memusage="16000",
+        slots="8",
+    shell: "cat {input} | sort -k1,1 -k2,2n --parallel={params.slots} > {output}"
 
-rule all_pycometh_merge_adjust:
-    input: expand(rules.pycometh_merge_adjust.output, subdir="asm", sample="HG003")
+rule pycometh_diffmet_samplecomp:
+    input: segmentation=rules.pycometh_segment_samplecomp_merge.output,
+           m5=lambda wc: expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=wc["mettype"])
+    output:
+        tsv=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.bed")
+    params:
+        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="16000",
+        slots="16"
+    shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
+
+rule pycometh_diffmet_samplecomp_all:
+    input: expand(rules.pycometh_diffmet_samplecomp.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)

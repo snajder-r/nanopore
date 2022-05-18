@@ -6,38 +6,12 @@ Snakemake pipeline performing the following steps:
 
 This is the main pipeline
 
+* Option: Re-basecalling fast5 files using guppy
 * Splitting of basecalled fast5 files into batches
-* Fast5 to fastq conversion
+* Fast5 to fastq conversion and optional quality filtering
 * Alignment to reference using minimap2
 * Methylation calling for cpg, gpc and dam using Nanopolish
-* Convert methylation call files into pickled pandas dataframe split per chromosome
-
-## Other pipelines:
-
-These are also implemented, albeit more or less experimental:
-
-### Tombo pipeline
-
-Note that this requires single-fast5 files. Use the script '''multi_to_single_fast5''' from the ont_fast5_api in order to convert.
-
-* Tombo indexing
-* Tombo resquiggle
-* Tombo methylation calling
-
-### Megalodon:
-
-This requires guppy basecall server installed.
-
-* Alignment-free methylation calling using megalodon
-
-Note that in this pipeline, Megalodon is configured perform batchwise and in parallel using CPUs.
-GPU accellerated computation is supported, but in a setup where you have only few GPU resources
-and many CPU resources, the high paralellization of a CPU cluster is actually faster.
-
-### Sniffles:
-
-* Merges bam files per sample (since sniffles needs to be able to count evidence for SVs)
-* Performs SV-calling using sniffles
+* Convert methylation call files into [meth5](https://github.com/snajder-r/MetH5Format) format
 
 ## Software requirements
 
@@ -51,10 +25,7 @@ These are what I am using, but newer should also work:
 
 Optionally:
 
-* tombo
 * guppy
-* megalodon
-* sniffles 
 
 ## Data structure:
 
@@ -67,14 +38,8 @@ basedir/
     |-<sample1>/
       |-guppy/ (basecalled multi-fast5 files)
         |-*.fast5       
-      |-multi/ (non-basecalled multi-fast5 files)
+      |-original/ (non-basecalled multi-fast5 files)
         |-*.fast5 
-      |-single/ (basecalled single-fast5 files for tombo)
-        |-0/
-          |-*.fast5 
-        |-1/
-          |-*.fast5
-        |-[...]
     |-<sample2>/
       |-[...]
     |-[...]
