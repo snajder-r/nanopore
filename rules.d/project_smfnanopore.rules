@@ -65,13 +65,36 @@ rule accessibility_to_timp_format:
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
     run:
         from nanopolish_smf.timp_format import Converter
+        from pyfaidx import Fasta
+
         if "accessibility_alphabet" in globals().keys():
             if accessibility_alphabet == "m6a":
                 motifs = {"A"}
+            if accessibility_alphabet == "temet":
+                motifs = {"CG", "GC", "A"}
             else:
                 motifs = {"CG", "GC"}
-        with Converter(reference, llr_threshold=float(wildcards["llr_thres"]), motifs=motifs, flank=2) as conv:
-            conv.convert_file(str(input), str(output))
+
+        with Converter(reference,llr_threshold=wildcards["llr_thres"],motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
+            with open(input[0],"r") as in_f, open(output[0], "w") as out_f:
+                in_f.readline() # header
+                for line in in_f:
+                    line = line.strip()
+                    entry = parse_line(line)
+                    if not entry.fwd_strand and ("CG" in motifs or "GC" in motifs):
+                        # we need to point calls for "C" back to the "G" the call is actually for... since it was called on the reverse strand and thats what the converter expects
+                        seq = ref[entry.chrom][entry.start:entry.end].seq.upper()
+                        for i in range(len(seq) - 2):
+                            twomer = seq[i:i + 2]
+                            if twomer == "CG" and entry.llrs[i]:
+                                entry.llrs[i + 1] = entry.llrs[i]
+                            if twomer == "GC" and entry.llrs[i + 1]:
+                                entry.llrs[i] = entry.llrs[i + 1]
+
+                    line = conv.convert_line(entry)
+                    timp_line = conv.format_line(line)
+                    if not entry.fwd_strand:
+                        out_f.write(f"{timp_line}\n")
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output
@@ -130,13 +153,11 @@ rule bonito_timp_format:
                         rpos = pos_mod.rpos
                         if rpos < 0:
                             continue
-                        if read.is_reverse:
-                            rpos -= 1  # otherwise it points at the G
                         p = float(pos_mod.qual) / 256
                         llrs[rpos - read.reference_start] = p_to_llr(np.clip(p, 0.000001, 0.999999))
 
                     read_entry = AccessibilityEntry(chrom,read.reference_start,read.reference_end,
-                        True,read.query_name,llrs)
+                        not read.is_reverse,read.query_name,llrs)
 
                     timp_line = converter.format_line(converter.convert_line(read_entry))
                     if timp_line is None:
