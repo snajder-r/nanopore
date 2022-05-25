@@ -65,6 +65,7 @@ rule accessibility_to_timp_format:
         jobname = "convert_timp_format_{sample}_{batch}_{minflank}"
     run:
         from nanopolish_smf.timp_format import Converter
+        from nanopolish_smf.accessibility import AccessibilityEntry, parse_line
         from pyfaidx import Fasta
 
         if "accessibility_alphabet" in globals().keys():
@@ -174,7 +175,7 @@ def merge_timp_format_input(wildcards):
 
 rule merge_timp_format:
     input: merge_timp_format_input
-    output: Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered_calls.tsv.bgz")
+    output: Path(basedir).joinpath('calls_timp_format_rev_strand_fixed', "{source}_{how}filtered_calls.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format"
@@ -195,7 +196,7 @@ def merge_timp_format_read_stats_input(wildcards, statstype=None):
 
 rule merge_timp_format_read_stats:
     input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="read_stats")
-    output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.read_stats.tsv.bgz")
+    output: part=Path(basedir).joinpath('calls_timp_format_rev_strand_fixed', "{source}_{how}filtered.read_stats.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format_read_stats_{source}_{how}filtered"
@@ -208,7 +209,7 @@ rule merge_timp_format_read_stats:
 
 rule merge_timp_format_site_freqs:
     input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="site_freqs")
-    output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.site_freqs.tsv.bgz")
+    output: part=Path(basedir).joinpath('calls_timp_format_rev_strand_fixed', "{source}_{how}filtered.site_freqs.tsv.bgz")
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format_site_freqs_{source}_{how}filtered"
@@ -228,7 +229,7 @@ def merge_timp_format_filter_stats_input(wildcards):
 
 rule merge_timp_format_filter_stats:
     input: merge_timp_format_filter_stats_input
-    output: temp(Path(basedir).joinpath('calls_timp_format', "{source}_ratefilter_stats.json"))
+    output: temp(Path(basedir).joinpath('calls_timp_format_rev_strand_fixed', "{source}_ratefilter_stats.json"))
     params:
         **default_sortjob_params,
         jobname = "merge_timp_format_filter_stats"
