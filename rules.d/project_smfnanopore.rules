@@ -67,17 +67,19 @@ rule accessibility_to_timp_format:
         from nanopolish_smf.timp_format import Converter
         from nanopolish_smf.accessibility import AccessibilityEntry, parse_line
         from pyfaidx import Fasta
+        import gzip
 
+        
         if "accessibility_alphabet" in globals().keys():
             if accessibility_alphabet == "m6a":
                 motifs = {"A"}
-            if accessibility_alphabet == "temet":
+            elif accessibility_alphabet == "temet":
                 motifs = {"CG", "GC", "A"}
             else:
                 motifs = {"CG", "GC"}
 
-        with Converter(reference,llr_threshold=wildcards["llr_thres"],motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
-            with open(input[0],"r") as in_f, open(output[0], "w") as out_f:
+        with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
+            with open(input[0],"r") as in_f, gzip.open(output[0], "tw") as out_f:
                 in_f.readline() # header
                 for line in in_f:
                     line = line.strip()
@@ -91,11 +93,11 @@ rule accessibility_to_timp_format:
                                 entry.llrs[i + 1] = entry.llrs[i]
                             if twomer == "GC" and entry.llrs[i + 1]:
                                 entry.llrs[i] = entry.llrs[i + 1]
-
                     line = conv.convert_line(entry)
                     timp_line = conv.format_line(line)
-                    if not entry.fwd_strand:
-                        out_f.write(f"{timp_line}\n")
+                    if timp_line is not None:
+                        if not entry.fwd_strand:
+                            out_f.write(f"{timp_line}\n")
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output

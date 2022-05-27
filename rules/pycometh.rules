@@ -1,8 +1,9 @@
+from random import shuffle
 from pathlib import Path
 from meth5.meth5 import MetH5File
 
 def pycometh_segment_get_chrom_batches_asm(wildcards):
-    with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards), "r", chunk_size=pycometh_segment_chunks_per_job) as f:
+    with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards), "r", chunk_size=meth5_chunk_size) as f:
         for chrom in f.get_chromosomes():
             cur_batch = []
             for chunk in f[chrom].get_chunk_ids():
@@ -23,15 +24,16 @@ rule pycometh_segment_chunks_asm:
         runtime='16:00',
         memusage='16000',
         slots='8',
-    shell: "{pycometh} Meth_Seg -i {input} -r {pycometh_haplotype_readgroup_param} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
+    shell: "{pycometh} Meth_Seg -i {input} -r {pycometh_haplotype_readgroup_param} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {meth5_chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
 def pycometh_segment_asm_merge_input(wc):
-    chroms_batches = list(pycometh_segment_get_chrom_batches_asm())
+    chroms_batches = list(pycometh_segment_get_chrom_batches_asm(wc))
+    print(wc, len(chroms_batches))
     # Shuffling the list of chrom-chunks might help better load-distribute the stress on the file system
     shuffle(chroms_batches)
 
     for chrom, chunks in chroms_batches:
-        yield rules.pycometh_segment_chunks_asm.output[0].format(chrom=chrom, chunks=chunks, windowsize=wc["windowsize"], maxsegments=wc["maxsegments"], sample=wc["sample"])
+        yield rules.pycometh_segment_chunks_asm.output[0].format(chrom=chrom, chunks=chunks, windowsize=wc["windowsize"], maxsegments=wc["maxsegments"], sample=wc["sample"], mettype=wc["mettype"])
 
 rule pycometh_segment_asm_merge:
     input: pycometh_segment_asm_merge_input
@@ -66,7 +68,7 @@ rule pycometh_diffmet_asm_all:
 
 def pycometh_segment_get_chrom_batches_samplecomp(wildcards):
     with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards, sample=pycometh_diffmet_samples[0]),
-            "r", chunk_size=pycometh_segment_chunks_per_job) as f:
+            "r", chunk_size=meth5_chunk_size) as f:
         for chrom in f.get_chromosomes():
             cur_batch = []
             for chunk in f[chrom].get_chunk_ids():
@@ -87,15 +89,15 @@ rule pycometh_segment_chunks_samplecomp:
         runtime='16:00',
         memusage='16000',
         slots='8'
-    shell: "{pycometh} Meth_Seg -i {input} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
+    shell: "{pycometh} Meth_Seg -i {input}  -r {pycometh_haplotype_readgroup_param} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {meth5_chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
 def pycometh_segment_samplecomp_merge_input(wc):
-    chroms_batches = list(pycometh_segment_get_chrom_batches_samplecomp())
+    chroms_batches = list(pycometh_segment_get_chrom_batches_samplecomp(wc))
     # Shuffling the list of chrom-chunks might help better load-distribute the stress on the file system
     shuffle(chroms_batches)
 
     for chrom, chunks in chroms_batches:
-        yield rules.pycometh_segment_chunks_samplecomp.output[0].format(chrom=chrom, chunks=chunks, windowsize=wc["windowsize"], maxsegments=wc["maxsegments"])
+        yield rules.pycometh_segment_chunks_samplecomp.output[0].format(chrom=chrom, chunks=chunks, mettype=wc["mettype"], windowsize=wc["windowsize"], maxsegments=wc["maxsegments"])
 
 rule pycometh_segment_samplecomp_merge:
     input: pycometh_segment_samplecomp_merge_input
@@ -115,7 +117,7 @@ rule pycometh_diffmet_samplecomp:
         tsv=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.tsv"),
         bed=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/diffmet_{windowsize}_{maxsegments}_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        jobname="pycometh_samplecomp_{hypothesis}_{windowsize}_{maxsegments}",
         ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
         misc="",
         runtime="06:00",
