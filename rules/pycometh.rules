@@ -59,7 +59,7 @@ rule pycometh_diffmet_asm:
         runtime="06:00",
         memusage="16000",
         slots="16",
-    shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
+    shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -s H1 H2 -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
 rule pycometh_diffmet_asm_all:
     input: expand(rules.pycometh_diffmet_asm.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)

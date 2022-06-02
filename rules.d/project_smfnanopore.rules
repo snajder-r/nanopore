@@ -108,8 +108,7 @@ rule nanopolish_to_timp_format:
         jobname = "convert_timp_format_{sample}_{batch}_{mtype}"
     run:
         from nanopolish_smf.timp_format import Converter
-        from nanopolish_smf.accessibility import AccessibilityFormat
-        from pyfaidx import Fasta
+        from nanopolish_smf.accessibility import AccessibilityProfile
         import gzip
 
         if wildcards["mtype"] == "dam":
@@ -119,8 +118,8 @@ rule nanopolish_to_timp_format:
         elif wildcards["mtype"] == "gpc":
             motifs = {"GC"}
 
-        with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
-            acc = AccessibilityFormat.read_original_nanopolish_format(input[0])
+        with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs=motifs,flank=2,exclude_zero_calls=True) as conv:
+            acc = AccessibilityProfile.read_original_nanopolish_format(input[0])
             with gzip.open(output[0], "tw") as out_f:
                 for chrom in acc.chrom_dict:
                     for strand in acc.chrom_dict[chrom]:
@@ -138,8 +137,21 @@ if "nanonome" in globals().keys():
         params:
             **default_smalljob_params,
             jobname = "convert_timp_format_{sample}_{batch}"
-        shell:
-            "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q cpggpc -g {reference} |gzip> {output}"
+        run:
+            from nanopolish_smf.timp_format import Converter
+            from nanopolish_smf.accessibility import AccessibilityProfile
+            import gzip
+            with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs={"CG", "GC"},flank=2,exclude_zero_calls=True) as conv:
+                acc = AccessibilityProfile.read_original_nanopolish_format(input[0])
+                with gzip.open(output[0], "tw") as out_f:
+                    for chrom in acc.chrom_dict:
+                        for strand in acc.chrom_dict[chrom]:
+                            for entry in acc.chrom_dict[chrom][strand]:
+                                line_dict = conv.convert_line(entry)
+                                timp_line = conv.format_line(line_dict)
+                                if timp_line is not None:
+                                    if not entry.fwd_strand:
+                                        out_f.write(f"{timp_line}\n")
 else:
     """Dummy rule"""
     rule nanonome_to_timp_format:
@@ -337,5 +349,6 @@ rule all_smf_nanopore:
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
 
 rule test:
-    input: Path(scratch_dir).joinpath('calls_timp_format_batched', "np_metcalls_mtype_dam_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz")
-           #Path(scratch_dir).joinpath('calls_timp_format_batched', "bonito_metcalls_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
+    input: Path(scratch_dir).joinpath('calls_timp_format_batched', "np_metcalls_mtype_dam_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
+           Path(scratch_dir).joinpath('calls_timp_format_batched', "bonito_metcalls_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
+           Path(scratch_dir).joinpath('calls_timp_format_batched',"np_accessibility_flank_8_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
