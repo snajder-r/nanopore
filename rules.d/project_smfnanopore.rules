@@ -69,7 +69,6 @@ rule accessibility_to_timp_format:
         from pyfaidx import Fasta
         import gzip
 
-        
         if "accessibility_alphabet" in globals().keys():
             if accessibility_alphabet == "m6a":
                 motifs = {"A"}
@@ -84,15 +83,17 @@ rule accessibility_to_timp_format:
                 for line in in_f:
                     line = line.strip()
                     entry = parse_line(line)
-                    if not entry.fwd_strand and ("CG" in motifs or "GC" in motifs):
-                        # we need to point calls for "C" back to the "G" the call is actually for... since it was called on the reverse strand and thats what the converter expects
-                        seq = ref[entry.chrom][entry.start:entry.end].seq.upper()
-                        for i in range(len(seq) - 2):
-                            twomer = seq[i:i + 2]
-                            if twomer == "CG" and entry.llrs[i]:
-                                entry.llrs[i + 1] = entry.llrs[i]
-                            if twomer == "GC" and entry.llrs[i + 1]:
-                                entry.llrs[i] = entry.llrs[i + 1]
+                    if not entry.fwd_strand and ["CG" in motifs or "GC" in motifs]:
+                        # Workaround to correct reverse strand calls to point them back to the actual modified base
+                        for i, llr in enumerate(entry.llrs.copy()):
+                            if llr == 0:
+                                continue
+                            threemer = ref[entry.chrom][entry.start+i-1:entry.start+i+2].seq
+                            if threemer.endswith("CG") and i < len(entry.llrs):
+                                entry.llrs[i+1] = entry.llrs[i]
+                            if threemer.startswith("GC") and i > 0:
+                                entry.llrs[i-1] = entry.llrs[i]
+
                     line = conv.convert_line(entry)
                     timp_line = conv.format_line(line)
                     if timp_line is not None:
@@ -105,8 +106,30 @@ rule nanopolish_to_timp_format:
     params:
         **default_smalljob_params,
         jobname = "convert_timp_format_{sample}_{batch}_{mtype}"
-    shell:
-        "{python} {nanopolish_timp_conversion_script} -c {wildcards.llr_thres} -i {input} -q {wildcards.mtype} -g {reference} | gzip > {output}"
+    run:
+        from nanopolish_smf.timp_format import Converter
+        from nanopolish_smf.accessibility import AccessibilityFormat
+        from pyfaidx import Fasta
+        import gzip
+
+        if wildcards["mtype"] == "dam":
+            motifs = {"A"}
+        elif wildcards["mtype"] == "cpg":
+            motifs = {"CG"}
+        elif wildcards["mtype"] == "gpc":
+            motifs = {"GC"}
+
+        with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
+            acc = AccessibilityFormat.read_original_nanopolish_format(input[0])
+            with gzip.open(output[0], "tw") as out_f:
+                for chrom in acc.chrom_dict:
+                    for strand in acc.chrom_dict[chrom]:
+                        for entry in acc.chrom_dict[chrom][strand]:
+                            line_dict = conv.convert_line(entry)
+                            timp_line = conv.format_line(line_dict)
+                            if timp_line is not None:
+                                if not entry.fwd_strand:
+                                    out_f.write(f"{timp_line}\n")
 
 if "nanonome" in globals().keys():
     rule nanonome_to_timp_format:
@@ -150,7 +173,7 @@ rule bonito_timp_format:
 
         with Converter(reference, exclude_zero_calls=True, llr_threshold=float(wildcards["llr_thres"]), motifs=motifs) as converter, gzip.open(output[0], "wt") as out_f:
             for chrom in converter.ref.keys():
-                for read in ModBam(input.bam,chrom,0,len(converter.ref[chrom])).reads():
+                for read in ModBam(input.bam).reads(chrom,0,len(converter.ref[chrom])):
                     llrs = np.zeros((read.reference_end - read.reference_start))
                     for pos_mod in read.mod_sites:
                         rpos = pos_mod.rpos
@@ -313,3 +336,6 @@ rule all_smf_nanopore:
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
 
+rule test:
+    input: Path(scratch_dir).joinpath('calls_timp_format_batched', "np_metcalls_mtype_dam_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz")
+           #Path(scratch_dir).joinpath('calls_timp_format_batched', "bonito_metcalls_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
