@@ -97,8 +97,7 @@ rule accessibility_to_timp_format:
                     line = conv.convert_line(entry)
                     timp_line = conv.format_line(line)
                     if timp_line is not None:
-                        if not entry.fwd_strand:
-                            out_f.write(f"{timp_line}\n")
+                        out_f.write(f"{timp_line}\n")
 
 rule nanopolish_to_timp_format:
     input: rules.metcall.output
@@ -347,8 +346,3 @@ rule all_smf_nanopore:
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
-
-rule test:
-    input: Path(scratch_dir).joinpath('calls_timp_format_batched', "np_metcalls_mtype_dam_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
-           Path(scratch_dir).joinpath('calls_timp_format_batched', "bonito_metcalls_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
-           Path(scratch_dir).joinpath('calls_timp_format_batched',"np_accessibility_flank_8_thres_2.0_sample_20220422_1823_X5_FAR33736_8d86581c_batch_0_ratefiltered_timp_format.tsv.gz"),
