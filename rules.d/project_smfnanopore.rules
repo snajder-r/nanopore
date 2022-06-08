@@ -69,13 +69,12 @@ rule accessibility_to_timp_format:
         from pyfaidx import Fasta
         import gzip
 
-        if "accessibility_alphabet" in globals().keys():
-            if accessibility_alphabet == "m6a":
-                motifs = {"A"}
-            elif accessibility_alphabet == "temet":
-                motifs = {"CG", "GC", "A"}
-            else:
-                motifs = {"CG", "GC"}
+        if accessibility_alphabet == "m6a":
+            motifs = {"A"}
+        elif accessibility_alphabet == "nome":
+            motifs = {"CG", "GC", "A"}
+        elif accessibility_alphabet == "m5c":
+            motifs = {"CG", "GC"}
 
         with Converter(reference,llr_threshold=float(wildcards["llr_thres"]),motifs=motifs,flank=2,exclude_zero_calls=True) as conv, Fasta(reference) as ref:
             with open(input[0],"r") as in_f, gzip.open(output[0], "tw") as out_f:
