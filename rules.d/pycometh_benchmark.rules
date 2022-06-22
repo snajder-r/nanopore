@@ -53,36 +53,24 @@ rule pycometh_diffmet_asm_methcp_all:
 # PARENTS COMPARISON FROM OTHER SEGMENTATIONS
 ############
 
-rule pycometh_diffmet_samplecomp_methylkit:
-    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methylkit.tsv"),
-           m5=expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=mettypes)
+
+rule pycometh_diffmet_samplecomp_other:
+    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/parents_mockbsseq_segments_{other}.tsv"),
+           m5=lambda wc: expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=wc["mettype"])
     output:
-        tsv=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
-        bed=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
+        tsv=Path(basedir,"pycometh/samplecomp_{other}/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/samplecomp_{other}/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
     params:
-        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
+        jobname="pycometh_methylkit_{hypothesis}",
         ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
         misc="",
         runtime="06:00",
-        memusage="16000",
-        slots="16",
-
+        memusage="24000",
+        slots="8"
     shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
-rule pycometh_diffmet_samplecomp_methcp:
-    input: segmentation=Path(basedir, "bs/mock_bsseq_from_nanopore/{sample}_mockbsseq_segments_methcp.tsv"),
-           m5=expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=mettypes)
-    output:
-        tsv=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
-        bed=Path(basedir,"pycometh/samplecomp_methylkit/{mettype}/diffmet/diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
-    params:
-        jobname="pycometh_{sample}_{hypothesis}_{windowsize}_{maxsegments}",
-        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
-        misc="",
-        runtime="06:00",
-        memusage="16000",
-        slots="16"
-    shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
+rule pycometh_diffmet_samplecomp_other_all:
+    input: expand(rules.pycometh_diffmet_samplecomp_other.output.tsv, mettype=mettypes, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], other=["methcp", "methylkit"])
 
 
 ############
