@@ -131,8 +131,7 @@ rule nanopolish_to_timp_format:
                             line_dict = conv.convert_line(entry)
                             timp_line = conv.format_line(line_dict)
                             if timp_line is not None:
-                                if not entry.fwd_strand:
-                                    out_f.write(f"{timp_line}\n")
+                                out_f.write(f"{timp_line}\n")
 
 if "nanonome" in globals().keys():
     rule nanonome_to_timp_format:
@@ -154,8 +153,7 @@ if "nanonome" in globals().keys():
                                 line_dict = conv.convert_line(entry)
                                 timp_line = conv.format_line(line_dict)
                                 if timp_line is not None:
-                                    if not entry.fwd_strand:
-                                        out_f.write(f"{timp_line}\n")
+                                    out_f.write(f"{timp_line}\n")
 else:
     """Dummy rule"""
     rule nanonome_to_timp_format:
