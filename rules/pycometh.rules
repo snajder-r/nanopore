@@ -89,7 +89,7 @@ rule pycometh_segment_chunks_samplecomp:
         runtime='16:00',
         memusage='16000',
         slots='8'
-    shell: "{pycometh} Meth_Seg -i {input}  -r {pycometh_haplotype_readgroup_param} -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {meth5_chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
+    shell: "{pycometh} Meth_Seg -i {input}  -r {pycometh_haplotype_readgroup_param} -s H1 H2 -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {meth5_chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
 def pycometh_segment_samplecomp_merge_input(wc):
     chroms_batches = list(pycometh_segment_get_chrom_batches_samplecomp(wc))
@@ -121,9 +121,10 @@ rule pycometh_diffmet_samplecomp:
         ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
         misc="",
         runtime="06:00",
-        memusage="16000",
-        slots="16"
-    shell: "{pycometh} Meth_Comp -i {input.m5} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
+        memusage="32000",
+        slots="8",
+        sample_id_list=" ".join(pycometh_diffmet_samples)
+    shell: "{pycometh} Meth_Comp -i {input.m5} -s {params.sample_id_list} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
 rule pycometh_diffmet_samplecomp_all:
     input: expand(rules.pycometh_diffmet_samplecomp.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)

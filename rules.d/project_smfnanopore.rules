@@ -6,6 +6,11 @@ default_smalljob_params = {"runtime":'1:00', "memusage":'4000', "slots":'1', "mi
 default_mediumjob_params = {"runtime":'4:00', "memusage":'8000', "slots":'2', "misc":''}
 default_sortjob_params = {"runtime":'16:00', "memusage":'8000', "slots":'2', "misc":''}
 
+if "collapse_strand_frequencies" in globals().keys():
+    collapse_strand_frequencies = bool(collapse_strand_frequencies)
+else:
+    collapse_strand_frequencies = False
+
 def compute_filter_timp_format_input(wc):
     if "_allmtypes_" in wc["basepath"]:
         for mtype in mettypes:
@@ -50,12 +55,13 @@ rule timp_format_read_stats:
         scriptparams=lambda wc: "-a" if "np_accessibility_" in wc["basepath"] else ""
     shell: """{python} -m nanopolish_smf.scripts.Get_read_stat -v {params.scriptparams} -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
 
-rule timp_format_read_frequencies:
+rule timp_format_site_frequencies:
     input: "{basepath}filtered_timp_format.tsv.gz"
-    output: temp("{basepath}filtered_site_freqs.tsv.gz")
+    output: temp("{basepath}filtered_site_{collapsed}.tsv.gz")
     params: **default_smalljob_params,
         jobname=lambda wc: f"site_freqs_{Path(wc['basepath']).name}",
-    shell: """{python} -m nanopolish_smf.scripts.GetFreq_from_bed -v -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
+        strand_collapse=lambda wc: {"freqs_collapsed": f"-r {reference} -c", "freqs":""}[wc["collapsed"]] # intentionally written so it would throw an error if it were anyhting other than whats in the dict
+    shell: """{python} -m nanopolish_smf.scripts.GetFreq_from_bed {params.strand_collapse} -v -i {input} | awk 'NR==1; NR>1{{print $0 | "LC_ALL=C sort --parallel={params.slots} -T {scratch_dir} -k1,1d -k2,2n"}}' | gzip > {output}"""
 
 rule accessibility_to_timp_format:
     input: rules.predict_accessibility.output.prediction
@@ -125,8 +131,7 @@ rule nanopolish_to_timp_format:
                             line_dict = conv.convert_line(entry)
                             timp_line = conv.format_line(line_dict)
                             if timp_line is not None:
-                                if not entry.fwd_strand:
-                                    out_f.write(f"{timp_line}\n")
+                                out_f.write(f"{timp_line}\n")
 
 if "nanonome" in globals().keys():
     rule nanonome_to_timp_format:
@@ -148,8 +153,7 @@ if "nanonome" in globals().keys():
                                 line_dict = conv.convert_line(entry)
                                 timp_line = conv.format_line(line_dict)
                                 if timp_line is not None:
-                                    if not entry.fwd_strand:
-                                        out_f.write(f"{timp_line}\n")
+                                    out_f.write(f"{timp_line}\n")
 else:
     """Dummy rule"""
     rule nanonome_to_timp_format:
@@ -238,11 +242,11 @@ rule merge_timp_format_read_stats:
             """
 
 rule merge_timp_format_site_freqs:
-    input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="site_freqs")
-    output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.site_freqs.tsv.bgz")
+    input: lambda wc: merge_timp_format_read_stats_input(wc, statstype="site_" + wc["collapsed"])
+    output: part=Path(basedir).joinpath('calls_timp_format', "{source}_{how}filtered.site_{collapsed}.tsv.bgz")
     params:
         **default_sortjob_params,
-        jobname = "merge_timp_format_site_freqs_{source}_{how}filtered"
+        jobname = "merge_timp_format_site_{collapsed}_{source}_{how}filtered"
     shell: """
                {tabix_load_hook}
                {python} -m nanopolish_smf.scripts.merge_presorted_bed -i {input} -s 1 | {python} -m nanopolish_smf.scripts.aggregate_met_counts_frequencies -s 1 | bgzip > {output.part};
@@ -287,7 +291,11 @@ def all_smf_timpformat_input(timp_rule, calls=True, call_stats=True, filter_stat
         if call_stats:
             for source in sources:
                 yield rules.merge_timp_format_read_stats.output.part.format(source=source, how=filter_how)
-                yield rules.merge_timp_format_site_freqs.output.part.format(source=source, how=filter_how)
+                if collapse_strand_frequencies:
+                    yield rules.merge_timp_format_site_freqs.output.part.format(source=source, how=filter_how, collapsed="freqs_collapsed")
+                else:
+                    yield rules.merge_timp_format_site_freqs.output.part.format(source=source,how=filter_how, collapsed="freqs")
+
 
     # Filter stats
     if filter_stats:
