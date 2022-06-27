@@ -175,13 +175,8 @@ rule bonito_timp_format:
         import gzip
         from nanopolish_smf.timp_format import Converter
         from nanopolish_smf.accessibility import AccessibilityEntry
+        from nanopolish_smf.math import p_to_llr
 
-        def p_to_llr(p, prior=0.5):
-            """
-            Converts the posterior probability p(a|x) into a log-likelihood ratio
-            log(p(x|a)/p(x|~a)) given a prior pa(a)
-            """
-            return -np.log(prior * (1 - p) / (p * (1 - prior)))
         if "remora_motifs" in globals().keys():
             motifs = set(remora_motifs)
         else:
