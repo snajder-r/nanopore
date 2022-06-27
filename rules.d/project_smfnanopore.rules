@@ -159,6 +159,8 @@ else:
     rule nanonome_to_timp_format:
         output: []
 
+    llr_threshold_nanonome = []
+
 
 rule bonito_timp_format:
     input: bam=rules.bonito_basecall_metcall.output.sorted,
@@ -343,6 +345,13 @@ rule all_smf_timpformat:
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito),
         rules.smf_timpformat_report.output,
+
+
+rule test:
+    input:
+        all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
+        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
+
 
 rule all_smf_nanopore:
     input:
