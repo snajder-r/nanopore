@@ -1,7 +1,7 @@
 
 rule metcall_modbam:
     input:
-        fq=rules.fast5_to_fastq.output,
+        fq=rules.fast5_to_fastq.output.fq,
         bam=rules.alignment.output,
         bai=f"{rules.alignment.output}.bai",
         fqidx=rules.nanopolish_index.output

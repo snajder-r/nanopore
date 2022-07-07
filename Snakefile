@@ -22,8 +22,14 @@ if 'chroms' not in config.keys():
         print("Trying to infer chromosomes from reference")
         chroms = [l[1:].split(" ")[0] for l in f if l.startswith(">")]
 
-chroms = [str(c) for c in chroms]
 
+has_multiplexed_samples = "multiplexed_samples" in globals()
+if not has_multiplexed_samples:
+    multiplexed_samples = []
+
+chroms = [str(c) for c in chroms]
+print(unique_samples)
+print(multiplexed_samples)
 #basedir = Path(basedir)
 
 '''
@@ -38,25 +44,70 @@ in the full list of sample and batch tuples.
 
 class SampleBatchesFilenames:
     def __init__(self):
-        if os.path.exists(os.path.join(basedir, 'raw')):
-            sbf = glob_wildcards(os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}', '{filename}.fast5'))
-            self.sbf_samples = sbf.sample
-            self.sbf_batches = sbf.batch
-            self.sbf_filenames = sbf.filename
+        samples = set(unique_samples).union(set(multiplexed_samples.keys()))
+        self.unique_sbf_samples = []
+        self.unique_sbf_batches = []
+        self.unique_sbf_filenames = []
+        self.unique_sb_samples = []
+        self.unique_sb_batches = []
 
-            sbdict = {}
-            for s, b in zip(sbf.sample, sbf.batch):
-                sbdict[f"{s}_{b}"] = (s,b)
-            self.sb_samples = [s for s,_ in sbdict.values()]
-            self.sb_batches = [b for _,b in sbdict.values()]
-            
-        elif os.path.exists(os.path.join(basedir, 'fastq')):
-            sb = glob_wildcards(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s' % fastq_ending))
-            self.sb_samples = sb.sample
-            self.sb_batches = sb.batch
-            self.sbf_samples = None
-            self.sbf_batches = None
-            self.sbf_filenames = None
+        self.mp_sbf_samples = []
+        self.mp_sbf_batches = []
+        self.mp_sbf_filenames = []
+        self.mp_sb_samples = []
+        self.mp_sb_batches = []
+
+        self.mp_ori_sbf_samples = []
+        self.mp_ori_sbf_batches = []
+        self.mp_ori_sbf_filenames = []
+        self.mp_ori_sb_samples = []
+        self.mp_ori_sb_batches = []
+
+        for sample in unique_samples:
+            sd = Path(basedir, "raw", sample, "batched")
+            if sd.exists():
+                for bd in sd.iterdir():
+                    if not bd.is_dir():
+                        continue
+                    self.unique_sb_samples.append(sample)
+                    self.unique_sb_batches.append(bd.name)
+                    for fast5 in bd.iterdir():
+                        if not fast5.name.endswith(".fast5"):
+                            continue
+                        self.unique_sbf_samples.append(sample)
+                        self.unique_sbf_batches.append(bd.name)
+                        self.unique_sbf_filenames.append(fast5.name)
+
+        for multiplexed_sample in multiplexed_samples:
+            sd = Path(basedir, "raw", multiplexed_sample, "batched")
+            if sd.exists():
+                for bd in sd.iterdir():
+                    if not bd.is_dir():
+                        continue
+                    self.mp_ori_sb_samples.append(multiplexed_sample)
+                    self.mp_ori_sb_batches.append(bd.name)
+
+                    for bc, sample in multiplexed_samples[multiplexed_sample].items():
+                        self.mp_sb_samples.append(sample)
+                        self.mp_sb_batches.append(bd.name)
+
+                    for fast5 in bd.iterdir():
+                        if not fast5.name.endswith(".fast5"):
+                            continue
+
+                        self.mp_ori_sbf_samples.append(multiplexed_sample)
+                        self.mp_ori_sbf_batches.append(bd.name)
+                        self.mp_ori_sbf_filenames.append(fast5.name)
+                        for bc, sample in multiplexed_samples[multiplexed_sample].items():
+                            self.mp_sbf_samples.append(sample)
+                            self.mp_sbf_batches.append(bd.name)
+                            self.mp_sbf_filenames.append(fast5.name)
+
+        self.sbf_samples = self.unique_sbf_samples + self.mp_sbf_samples
+        self.sbf_batches = self.unique_sbf_batches + self.mp_sbf_batches
+        self.sbf_filenames = self.unique_sbf_filenames + self.mp_sbf_filenames
+        self.sb_samples = self.unique_sb_samples + self.mp_sb_samples
+        self.sb_batches = self.unique_sb_batches + self.mp_sb_batches
 
 sbf = SampleBatchesFilenames()
 
@@ -127,14 +178,14 @@ not computationally expensive.
 '''
 
 
-def split_batches_from_file_list(all_files, outdir):
+def split_batches_from_file_list(all_files, outdir, prefix=""):
     # Create "batched" directory if it doesn't exist
     if not os.path.exists(outdir):
         os.mkdir(outdir)
     i = 0
     b = 0
     while i < len(all_files):
-        batchdir = os.path.join(outdir, '%d' % b)
+        batchdir = os.path.join(outdir, f"{prefix}{b}")
         os.mkdir(batchdir)
         for _ in range(per_batch):
             if i == len(all_files):
@@ -157,7 +208,11 @@ rule split_batches:
     params:
           outdir=os.path.join(basedir, 'raw', '{sample}', 'batched')
     run:
-        split_batches_from_file_list(input, params.outdir)
+        if wildcards["sample"] in multiplexed_samples:
+            prefix = "B"
+        else:
+            prefix = ""
+        split_batches_from_file_list(input, params.outdir, prefix=prefix)
         with open(output[0], 'w') as fp:
             pass
 
@@ -178,13 +233,13 @@ rule split_batches_from_fastq:
             pass
 
 rule all_split_batches:
-    input: expand(rules.split_batches.output, sample=unique_samples)
+    input: expand(rules.split_batches.output, sample=unique_samples + list(multiplexed_samples))
 
 rule all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 include: 'rules/fastq.rules'
-include: 'rules/guppy.rules'
+#include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
 include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'

@@ -15,7 +15,7 @@ The following steps are performed:
   - Create bam index
 '''
 rule alignment_chr11_chr17:
-    input: rules.fast5_to_fastq.output
+    input: rules.fast5_to_fastq.output.fq
     output: os.path.join(basedir,'mapping_chr11_chr17/{sample}/{batch}.sorted.filtered.bam')
     params:
         jobname='align_{sample}_{batch}',

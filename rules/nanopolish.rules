@@ -17,47 +17,23 @@ The output files will be created within the fastq directory
 (with .index.readdb suffix for each fq file) 
 '''
 
-
-
-def nanopore_summary_file(wildcards):
-    # FIXME this could help speed nanopolish index up but first requires fixes to the summary generation from pycoQC so it writes the filename
-    # For now i will disable it
-    return ""
-
-    filename = os.path.join(basedir, 'raw', wildcards['sample'], 'guppy_summary.txt')
-    if os.path.exists(filename):
-        return f'-s {filename}'
-    else:
-        return ''
+print(os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending))
 
 rule nanopolish_index:
     input:
-        f5=os.path.join(basedir, 'raw', '{sample}', 'batched', '{batch}'),
-        fq=rules.fast5_to_fastq.output
+        summary=rules.sequencing_summary.output.summary,
+        fq=rules.fast5_to_fastq.output.fq
     output: os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending)
     params:
-        summary_file=nanopore_summary_file,
         jobname='npidx_{sample}_{batch}',
         runtime='08:00',
         memusage='2000',
         slots='1',
         misc=''
-    shell: '{nanopolish} index {params.summary_file} -d {input.f5} {input.fq}'
+    shell: '{nanopolish} index {input.summary} {input.fq}'
 
-rule nanopolish_index_from_multiplex:
-    input:
-        f5=os.path.join(basedir, 'raw','multiplexed'),
-        fq=rules.fast5_to_fastq.output,
-        summary=os.path.join(basedir, 'raw', 'sequence_summary_files.fof.txt')
-    output: os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s.index.readdb' % fastq_ending)
-    params:
-        jobname='npidx_{sample}_{batch}',
-        runtime='24:00',
-        memusage='16000',
-        slots='1',
-        misc=''
-    shell: '{nanopolish} index -d {input.f5} -f {input.summary} {input.fq}'
-
+rule test:
+    input: "/omics/groups/OE0540/internal/projects/chromothripsis_medulloblastoma/ont_analysis/2022_reanalysis/fastq/Germline/B153.fq.index.readdb"
 
 rule all_nanopolish_index:
     input: expand(os.path.join(basedir, 'fastq', '{sample}', '{batch}.%s.index.readdb' % fastq_ending), zip_combinator, sample=sbf.sb_samples, batch=sbf.sb_batches)
@@ -72,7 +48,7 @@ The output will be stored in the "met" directory in tsv format.
 '''
 rule metcall:
     input: 
-        fq=rules.fast5_to_fastq.output,
+        fq=rules.fast5_to_fastq.output.fq,
         bam=rules.alignment.output,
         bai=f"{rules.alignment.output}.bai",
         fqidx=rules.nanopolish_index.output
@@ -94,7 +70,7 @@ rule all_metcall:
 
 rule eventalign:
     input:
-        fq=rules.fast5_to_fastq.output,
+        fq=rules.fast5_to_fastq.output.fq,
         bam=rules.alignment.output,
         bai=f"{rules.alignment.output}.bai",
         fqidx=rules.nanopolish_index.output
