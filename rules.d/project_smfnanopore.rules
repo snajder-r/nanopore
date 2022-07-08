@@ -333,6 +333,56 @@ rule smf_timpformat_report:
         report.to_csv(output[0], sep="\t")
 
 
+rule convert_np_accessibility_to_modbam:
+    input: metcall = rules.predict_accessibility.output.prediction,
+           bam = rules.alignment.output[0],
+           bai = rules.alignment.output[0] + ".bai"
+    output: bam = temp(Path(predict_accessibility_outdir(), "accessibility_modbam.bam"))
+    params: jobname="convert_np_acc_modbam_{sample}_{batch}",
+            **default_smalljob_params
+    run:
+        from nanopolish_smf.modbam import ModBamWriter
+        from nanopolish_smf.accessibility import AccessibilityProfile
+
+        if accessibility_alphabet == "m6a":
+            modified_bases = {"x":"A"}
+        elif accessibility_alphabet == "nome":
+            modified_bases = {"z": "C", "x": "A"}
+        elif accessibility_alphabet == "m5c":
+            modified_bases = {"z": "C"}
+
+        acc = AccessibilityProfile.read(input.metcall)
+        with ModBamWriter(input.bam, output.bam, modified_bases=modified_bases) as writer:
+            writer.convert(acc)
+
+rule sort_np_accessibility_modbam:
+    input: bam = rules.convert_np_accessibility_to_modbam.output.bam
+    output: bam = temp(Path(predict_accessibility_outdir(), "accessibility_modbam.sorted.bam"))
+    params: jobname="sort_modbam_{sample}_{batch}",
+            **default_mediumjob_params
+    shell: "{samtools} sort {input.bam} > {output.bam}"
+
+rule prepare_merge_np_accessibility_modbam:
+    input: lambda wc: expand(rules.sort_np_accessibility_modbam.output.bam, sample=wc["sample"], minflank=wc["minflank"], batch=samplebatches(wc["sample"]))
+    output: filelist = temp(Path(basedir).joinpath('nanopolish_accessibility', '{sample}', 'flank_{minflank}', "accessibility_modbam_merging_filelist.txt"))
+    params: **default_smalljob_params, jobname="prepare_merge_np_acc_modbam"
+    shell: 'echo {input} | sed \'s/ /\\n/g\' > {output.filelist}'
+
+rule merge_np_accessibility_modbam:
+    input: filelist = rules.prepare_merge_np_accessibility_modbam.output.filelist
+    output: bam = Path(basedir).joinpath('nanopolish_accessibility', '{sample}', 'flank_{minflank}', "accessibility_modbam.bam")
+    params:
+        jobname='mergemodbam_{sample}_{minflank}',
+        runtime='24:00',
+        memusage='16000',
+        slots='1',
+        misc=''
+    shell:
+        "{samtools} merge -b {input.filelist} {output.bam}"
+
+rule all_merge_np_accessibility_modbam:
+    input: expand(rules.merge_np_accessibility_modbam.output.bam, sample=unique_samples, minflank=all_flanking_options)
+
 rule all_smf_timpformat:
     input:
         all_smf_timpformat_input(rules.accessibility_to_timp_format, minflank=all_flanking_options, llr_thres=llr_threshold_accessibility),
@@ -340,13 +390,6 @@ rule all_smf_timpformat:
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito),
         rules.smf_timpformat_report.output,
-
-
-rule test:
-    input:
-        all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
-        all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
-
 
 rule all_smf_nanopore:
     input:
