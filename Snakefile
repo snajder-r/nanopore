@@ -188,8 +188,6 @@ include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
 include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'
-include: 'rules/sniffles.rules'
-include: 'rules/edgecase.rules'
 
 if "nanonome" in globals():
     include: "rules/nanonome.rules"
