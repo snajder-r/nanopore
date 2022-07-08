@@ -125,7 +125,7 @@ rule sequencing_summary:
             for infiles in [input.unique, input.multiplexed]:
                 for infile in infiles:
                     for line in open(infile, "rt"):
-                        f.write("f{line.strip()}\n")
+                        f.write(f"{line.strip()}\n")
 
 def get_multiplexed_fastq(wc, return_summary=False):
     for origin in multiplexed_samples:
@@ -173,3 +173,36 @@ ruleorder: fastq_move_demultiplex > fast5_to_fastq
 
 checkpoint all_fast5_to_fastq:
     input: expand(rules.fast5_to_fastq.output.fq, zip, sample=sbf.sb_samples,  batch=sbf.sb_batches)
+
+rule compress_fastq:
+    input: fq = rules.fast5_to_fastq.output.fq
+    output: fqbgz = temp(rules.fast5_to_fastq.output.fq + ".tmp.bgz")
+    params:
+        jobname='bgzip',
+        runtime='02:00',
+        memusage='1000',
+        slots='1',
+        misc=''
+    shell: """
+              module load htslib;
+              bgzip -c {input.fq} > {output.fqbgz}
+           """
+
+rule merge_fastq:
+    input: lambda wc: [rules.compress_fastq.output.fqbgz.format(sample=wc["sample"], batch=b) for b in samplebatches(wc["sample"])]
+    output: fqbgz = Path(basedir, 'fastq', "{sample}.fq.bgz")
+    params:
+        jobname='merge_fq_bgz_{sample}',
+        runtime='24:00',
+        memusage='8000',
+        slots='1',
+        misc=''
+    run:
+        with open(output.fqbgz, "wb") as out_f:
+            for infile in input:
+                with open(infile,"rb") as in_f:
+                    buf = in_f.read()
+                    out_f.write(buf)
+
+rule all_merge_fastq:
+    input: expand(rules.merge_fastq.output, sample=unique_samples)
