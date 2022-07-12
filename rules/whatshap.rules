@@ -2,7 +2,7 @@ from pathlib import Path
 
 rule whatshap_haplotag:
     input: vcf = Path(basedir).joinpath("svs","{sample}_phased.vcf.gz"),
-           bam = rules.alignment.output
+           bam = rules.filter_alignment.output.bam
     output: Path(basedir).joinpath("whatshap","{sample}","haplotags_{batch}.tsv")
     params:
         jobname='whatshap_haplotag_{sample}_{batch}',

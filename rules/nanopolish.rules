@@ -19,18 +19,35 @@ The output files will be created within the fastq directory
 
 print(os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending))
 
+def map_back_multiplexed(wc, return_summary=True, return_fast5_dir=False):
+    batch = wc["batch"]
+    if batch.startswith("B"):
+        for origin in multiplexed_samples:
+            for bc, sample in multiplexed_samples[origin].items():
+                if sample == wc["sample"]:
+                    if return_summary:
+                        return rules.fast5_to_fastq_multiplexed.output.summary.format(sample=origin, batch=batch)
+                    if return_fast5_dir:
+                        return Path(basedir, "raw", origin, "batched", batch)
+    else:
+        if return_summary:
+            return rules.fast5_to_fastq.output.summary.format(sample=wc["sample"], batch=batch)
+        if return_fast5_dir:
+            return Path(basedir,"raw",wc["sample"],"batched",batch)
+
 rule nanopolish_index:
     input:
-        summary=rules.sequencing_summary.output.summary,
+        summary=map_back_multiplexed,
         fq=rules.fast5_to_fastq.output.fq
     output: os.path.join(basedir, 'fastq/{sample}/{batch}.%s.index.readdb' % fastq_ending)
     params:
+        fast5_dir=lambda wc: map_back_multiplexed(wc, return_summary=False, return_fast5_dir=True),
         jobname='npidx_{sample}_{batch}',
-        runtime='08:00',
-        memusage='2000',
+        runtime='01:00',
+        memusage='6000',
         slots='1',
         misc=''
-    shell: '{nanopolish} index {input.summary} {input.fq}'
+    shell: '{nanopolish} index -d {params.fast5_dir} -s {input.summary} {input.fq}'
 
 rule test:
     input: "/omics/groups/OE0540/internal/projects/chromothripsis_medulloblastoma/ont_analysis/2022_reanalysis/fastq/Germline/B153.fq.index.readdb"
@@ -49,8 +66,8 @@ The output will be stored in the "met" directory in tsv format.
 rule metcall:
     input: 
         fq=rules.fast5_to_fastq.output.fq,
-        bam=rules.alignment.output,
-        bai=f"{rules.alignment.output}.bai",
+        bam=rules.filter_alignment.output.bam,
+        bai=f"{rules.filter_alignment.output.bam}.bai",
         fqidx=rules.nanopolish_index.output
     output: os.path.join(basedir, 'met','{sample}','{batch}_met_{mtype}.tsv')
     params:
@@ -71,8 +88,8 @@ rule all_metcall:
 rule eventalign:
     input:
         fq=rules.fast5_to_fastq.output.fq,
-        bam=rules.alignment.output,
-        bai=f"{rules.alignment.output}.bai",
+        bam=rules.filter_alignment.output.bam,
+        bai=f"{rules.filter_alignment.output.bam}.bai",
         fqidx=rules.nanopolish_index.output
     output: os.path.join(basedir, 'eventalign','{sample}','{batch}.tsv')
     params:

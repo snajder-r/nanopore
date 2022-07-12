@@ -28,8 +28,7 @@ if not has_multiplexed_samples:
     multiplexed_samples = []
 
 chroms = [str(c) for c in chroms]
-print(unique_samples)
-print(multiplexed_samples)
+
 #basedir = Path(basedir)
 
 '''
@@ -301,4 +300,4 @@ rule report_methylation:
 rule all_report_methylation:
     input: expand(rules.report_methylation.output, mtype=mettypes, sample=unique_samples)
 
-localrules: prepare_mergebams, split_batches, split_batches_from_fastq
+localrules: split_batches, split_batches_from_fastq

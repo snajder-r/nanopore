@@ -34,8 +34,8 @@ rule predict_accessibility:
     input:
         fq=rules.fast5_to_fastq.output.fq,
         fqindex=rules.nanopolish_index.output,
-        bam=rules.alignment.output,
-        bai=f"{rules.alignment.output}.bai",
+        bam=rules.filter_alignment.output.bam,
+        bai=f"{rules.filter_alignment.output.bam}.bai",
         model=accessibility_model
     output:
         model = temp(predict_accessibility_outdir().joinpath(Path(accessibility_model).name)),

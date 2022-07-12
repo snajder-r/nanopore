@@ -52,6 +52,7 @@ def extract_fastq(infiles, out_fastq, out_summary):
     failed = 0
     crit = 0
     with open(out_path,'w') as of, open(out_summary, "wt") as sof:
+        sof.write("read_id\tfilename_fast5\tbasecaller_version\n")
         for i in range(len(infiles)):
             with h5py.File(infiles[i],'r') as f:
                 for read in f.keys():
@@ -124,7 +125,11 @@ rule sequencing_summary:
             f.write("read_id\tfilename_fast5\tbasecaller_version\n")
             for infiles in [input.unique, input.multiplexed]:
                 for infile in infiles:
+                    header = True
                     for line in open(infile, "rt"):
+                        if header:
+                            header = False
+                            continue
                         f.write(f"{line.strip()}\n")
 
 def get_multiplexed_fastq(wc, return_summary=False):
