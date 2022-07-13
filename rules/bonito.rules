@@ -52,7 +52,36 @@ rule bonito_basecall_metcall:
         misc = gpu_params,
     shell: bonito_script()
 
+def prepare_bonito_metcall_mergebams_input(wc):
+    for batch in samplebatches(wc["sample"]):
+        yield rules.bonito_basecall_metcall.output.sorted.format(sample=wc["sample"], batch=batch)
+
+rule prepare_bonito_metcall_mergebams:
+    input: prepare_bonito_metcall_mergebams_input
+    output: os.path.join(basedir, 'remora/{sample}.bam.filelist.txt')
+    run:
+        with open(output[0],"w") as f:
+            for infile in input:
+                f.write(f"{infile}\n")
+
+rule merge_bonito_metcall:
+    input: rules.prepare_bonito_metcall_mergebams.output
+    output: Path(basedir).joinpath("remora", "{sample}_merged.bam")
+    params:
+        jobname='remora_mergebam_{sample}',
+        runtime='24:00',
+        memusage='24000',
+        slots='1',
+        misc=''
+    shell: '''
+           {samtools} merge -b {input} - > {output}
+           '''
+
+rule all_merge_bonito_metcall:
+    input: expand(rules.merge_bonito_metcall.output, sample=unique_samples)
 
 rule all_bonito_basecall_metcall:
     input: expand(rules.bonito_basecall_metcall.output.sorted, zip, sample=sbf.sbf_samples,  batch=sbf.sbf_batches),
            expand(rules.bonito_basecall_metcall.output.sorted+".bai", zip, sample=sbf.sbf_samples, batch=sbf.sbf_batches),
+
+localrules: prepare_bonito_metcall_mergebams
