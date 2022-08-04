@@ -25,7 +25,7 @@ if 'chroms' not in config.keys():
 
 has_multiplexed_samples = "multiplexed_samples" in globals()
 if not has_multiplexed_samples:
-    multiplexed_samples = []
+    multiplexed_samples = {}
 
 chroms = [str(c) for c in chroms]
 

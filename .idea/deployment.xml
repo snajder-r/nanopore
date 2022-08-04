@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="worker01">
+  <component name="PublishConfigData" serverName="r933r@odcf-worker01:22">
     <serverData>
-      <paths name="ebi">
+      <paths name="Copy of project-level server 'ebi'">
         <serverdata>
           <mappings>
-            <mapping deploy="/nanopore" local="$PROJECT_DIR$" web="/" />
-            <mapping local="" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
@@ -18,10 +17,31 @@
           </mappings>
         </serverdata>
       </paths>
-      <paths name="worker01">
+      <paths name="r933r@odcf-worker01:22">
         <serverdata>
           <mappings>
             <mapping deploy="/code/nanopore" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="r933r@odcf-worker01:22 agent">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="r933r@odcf-worker01:22 agent (1)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="ubuntu@dash.rsnajder.eu:22 key">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

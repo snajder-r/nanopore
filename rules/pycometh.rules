@@ -62,7 +62,7 @@ rule pycometh_diffmet_asm:
     shell: "{pycometh} Meth_Comp -i {input.m5} -r {pycometh_haplotype_readgroup_param} -s H1 H2 -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
 rule pycometh_diffmet_asm_all:
-    input: expand(rules.pycometh_diffmet_asm.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
+    input: expand(rules.pycometh_diffmet_asm.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=pycometh_ihw, windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
 
 # Sample comparison
 
@@ -88,7 +88,7 @@ rule pycometh_segment_chunks_samplecomp:
         misc="",
         runtime='16:00',
         memusage='16000',
-        slots='8'
+        slots=pycometh_segment_chunks_per_job
     shell: "{pycometh} Meth_Seg -i {input}  -r {pycometh_haplotype_readgroup_param} -s H1 H2 -c {wildcards.chrom} -n {params.chunks} -t {output} --chunk_size {meth5_chunk_size} -p {params.slots} -m {wildcards.maxsegments} -w {wildcards.windowsize}"
 
 def pycometh_segment_samplecomp_merge_input(wc):
@@ -127,4 +127,4 @@ rule pycometh_diffmet_samplecomp:
     shell: "{pycometh} Meth_Comp -i {input.m5} -s {params.sample_id_list} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
 
 rule pycometh_diffmet_samplecomp_all:
-    input: expand(rules.pycometh_diffmet_samplecomp.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=["yes", "no"], windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
+    input: expand(rules.pycometh_diffmet_samplecomp.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=pycometh_ihw, windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
