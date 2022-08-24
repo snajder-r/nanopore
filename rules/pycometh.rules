@@ -70,6 +70,8 @@ def pycometh_segment_get_chrom_batches_samplecomp(wildcards):
     with MetH5File(str(rules.merge_met_hdf5.output[0]).format(**wildcards, sample=pycometh_diffmet_samples[0]),
             "r", chunk_size=meth5_chunk_size) as f:
         for chrom in f.get_chromosomes():
+            if chrom not in chroms:
+                continue
             cur_batch = []
             for chunk in f[chrom].get_chunk_ids():
                 cur_batch.append(f"{chunk}")
@@ -128,3 +130,22 @@ rule pycometh_diffmet_samplecomp:
 
 rule pycometh_diffmet_samplecomp_all:
     input: expand(rules.pycometh_diffmet_samplecomp.output.tsv, mettype=mettypes, sample=unique_samples, hypothesis=pycometh_hypothesis, ihw=pycometh_ihw, windowsize=pycometh_windowsize, maxsegments=pycometh_maxsegments)
+
+rule pycometh_cgi_diffmet:
+    input: segmentation=Path(basedir, "/home/r933r/data/projects/chromothripsis_medulloblastoma/ont_analysis/2022_reanalysis/pycometh/CGI.bed"),
+           m5=lambda wc: expand(rules.merge_met_hdf5.output, sample=pycometh_diffmet_samples, mettype=wc["mettype"])
+    output:
+        tsv=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/CGI_diffmet_hyp_{hypothesis}_ihw_{ihw}.tsv"),
+        bed=Path(basedir,"pycometh/samplecomp/{mettype}/diffmet/CGI_diffmet_hyp_{hypothesis}_ihw_{ihw}.bed")
+    params:
+        jobname="pycometh_samplecomp_{hypothesis}",
+        ihw=lambda wc: " --do_independent_hypothesis_weighting" if wc["ihw"] == "yes" else "",
+        misc="",
+        runtime="06:00",
+        memusage="32000",
+        slots="8",
+        sample_id_list=" ".join(pycometh_diffmet_samples)
+    shell: "{pycometh} Meth_Comp -i {input.m5} -s {params.sample_id_list} -f {reference} -a {input.segmentation} -w {params.slots} -t {output.tsv} -b {output.bed} --hypothesis {wildcards.hypothesis} {params.ihw} -p "
+
+rule pycometh_cgi_diffmet_all:
+    input: expand(rules.pycometh_cgi_diffmet.output.tsv,mettype=mettypes,hypothesis=pycometh_hypothesis,ihw=pycometh_ihw)

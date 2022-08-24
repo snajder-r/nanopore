@@ -76,6 +76,16 @@ class SampleBatchesFilenames:
                         self.unique_sbf_samples.append(sample)
                         self.unique_sbf_batches.append(bd.name)
                         self.unique_sbf_filenames.append(fast5.name)
+            else:
+                print("No raw reads found. Trying to run from fastq")
+                sd = Path(basedir,"fastq",sample)
+                if sd.exists():
+                    for fq_file in sd.iterdir():
+                        if not fq_file.name.endswith(fastq_ending):
+                            continue
+                        batch_num = fq_file.name.split(".")[0]
+                        self.unique_sb_samples.append(sample)
+                        self.unique_sb_batches.append(batch_num)
 
         for multiplexed_sample in multiplexed_samples:
             sd = Path(basedir, "raw", multiplexed_sample, "batched")
@@ -238,12 +248,16 @@ rule all_split_batches_from_fastq:
     input: expand(rules.split_batches_from_fastq.output, sample=unique_samples)
 
 include: 'rules/fastq.rules'
-#include: 'rules/guppy.rules'
+include: 'rules/guppy.rules'
 include: 'rules/mapping.rules'
 include: 'rules/nanopolish.rules'
 include: 'rules/pycoqc.rules'
-include: 'rules/sniffles.rules'
-include: 'rules/edgecase.rules'
+
+#include: 'rules/edgecase.rules'
+
+if "gatk" in globals():
+    include: "rules.d/allele_coverage.rules"
+
 
 if "nanonome" in globals():
     include: "rules/nanonome.rules"

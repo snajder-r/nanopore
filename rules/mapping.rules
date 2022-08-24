@@ -108,7 +108,7 @@ rule mergebams:
         slots='1',
         misc=''
     shell: '''
-           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} > {output}
+           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} | {samtools} addreplacerg -r "@RG\tID:{wildcards.sample}" --output-fmt BAM - > {output}
            '''
 
 def prepare_mergebams_unfiltered_input(wildcards):
@@ -134,7 +134,7 @@ rule mergebams_unfiltered:
         slots='1',
         misc=''
     shell: '''
-           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} > {output}
+           {samtools} merge -b {input} - | {samtools} calmd -b - {reference} | {samtools} addreplacerg -r "@RG\tID:{wildcards.sample}" --output-fmt BAM - > {output}
            '''
 
 rule all_mergebams:

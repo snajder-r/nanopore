@@ -23,6 +23,12 @@ case we just skip that file and move on.
 '''
 
 def fast5_to_fastq_input(wildcards, multiplexed):
+
+    outfile = Path(rules.fast5_to_fastq.output.fq.format(**wildcards))
+    if outfile.exists():
+        # Shortcut
+        return
+
     indir = os.path.join(basedir,'raw',wildcards['sample'],'batched', wildcards['batch'])
     sbf_samples = sbf.mp_ori_sbf_samples if multiplexed else sbf.unique_sbf_samples
     sbf_batches = sbf.mp_ori_sbf_batches if multiplexed else sbf.unique_sbf_batches
