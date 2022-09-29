@@ -53,7 +53,7 @@ def extract_fastq(infiles, out_fastq, out_summary):
     # Rudimentary disk space check. Output is estimated to be half of the input size,
     # but we also want to multiply with 2 to be sure.. so this works
     out_path = check_free_space(out_fastq,compute_total_file_size_gb(infiles))
-
+    basecall_group = 'Basecall_1D_%s' % basecall_id
     passed = 0
     failed = 0
     crit = 0
