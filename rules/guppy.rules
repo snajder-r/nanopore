@@ -17,6 +17,10 @@ if "jobid_env_var" not in globals().keys():
 if "guppy_model" not in globals().keys():
     guppy_model = "dna_r9.4.1_450bps_modbases_5mc_hac.cfg"
 
+if "guppy_misc_params" not in globals().keys():
+    guppy_misc_params = ""
+
+
 class GuppyWrapper:
     def __init__(self, guppy_dir, scratch_dir=None, batch_size=5, gpu=True, cpu_threads=1):
         self.guppy = os.path.join(guppy_dir,'bin','guppy_basecaller')
@@ -28,12 +32,13 @@ class GuppyWrapper:
     def run_guppy(self, indir, outdir):
         if self.gpu:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} --device auto " \
-                    f"--config {guppy_model} --gpu_runners_per_device 1 " \
+                    f"--config {guppy_model} {guppy_misc_params} --gpu_runners_per_device 1 " \
                     "--fast5_out".split(' ')
         else:
             guppy_command = f"{self.guppy} --input_path {indir} --save_path {outdir} " \
-                    f"--config {guppy_model} --num_callers {self.cpu_threads} " \
+                    f"--config {guppy_model} {guppy_misc_params} --num_callers {self.cpu_threads} " \
                     "--fast5_out".split(' ')
+        guppy_command = [s for s in guppy_command if len(s.strip())>0] # remove empty arguments
         print(guppy_command)
         p = subprocess.Popen(guppy_command, stdout=subprocess.PIPE)
 
@@ -93,7 +98,7 @@ class GuppyWrapper:
 ##############################################################################
 '''
 
-num_batches = 16
+num_batches = 32
 
 def guppy_basecall_batches(wc):
     sample = wc["sample"]
