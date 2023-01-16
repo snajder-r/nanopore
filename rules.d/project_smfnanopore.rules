@@ -357,3 +357,10 @@ rule all_smf_nanopore:
         all_smf_timpformat_input(rules.nanonome_to_timp_format, llr_thres=llr_threshold_nanonome),
         all_smf_timpformat_input(rules.nanopolish_to_timp_format, mtype=mettypes, llr_thres=llr_threshold_nanopolish),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
+
+
+rule smf_nanopore_remora_only:
+    input:
+        expand(rules.mergebams.output, sample=unique_samples),
+        all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
+
