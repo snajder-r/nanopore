@@ -1,0 +1,21 @@
+name: modusa
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+  - snajder-r
+dependencies:
+  - matplotlib-base
+  - pip
+  - pyfaidx
+  - python=3.8
+  - pyyaml
+  - snakemake
+  - meth5
+  - pip:
+    - h5py
+    - numpy
+    - pandas
+    - pysam
+    - scipy
+    - tqdm
