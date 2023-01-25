@@ -405,3 +405,8 @@ rule smf_nanopore_remora_only:
     input:
         expand(rules.mergebams.output, sample=unique_samples),
         all_smf_timpformat_input(rules.bonito_timp_format, llr_thres=llr_threshold_bonito)
+
+rule smf_nanopore_accessibility_only:
+    input:
+        expand(rules.mergebams.output, sample=unique_samples),
+        all_smf_timpformat_input(rules.accessibility_to_timp_format, llr_thres=llr_threshold_accessibility, minflank=all_flanking_options)
